@@ -90,51 +90,6 @@ cmake --install . --prefix /path/to/4diac-ide
 
 ---
 
-## 📁 Repository Structure
-
-```
-BootCtrl-EdgeOS/
-├── 📁 src/                      # Core C++ implementation
-│   ├── core/                    # ML engine core
-│   ├── inference/               # TFLite/ONNX backends
-│   ├── preprocessing/           # Data preprocessing
-│   ├── postprocessing/          # Output processing
-│   └── utils/                   # Utilities
-│
-├── 📁 fb/                       # IEC 61499 Function Blocks
-│   ├── basic/                   # Basic ML FBs
-│   ├── preprocessing/           # Preprocessing FBs
-│   ├── inference/               # Inference FBs
-│   └── postprocessing/          # Postprocessing FBs
-│
-├── 📁 tools/                    # Development tools
-│   ├── model_converter/         # Convert models to FB format
-│   ├── fb_generator/            # Generate FB from model
-│   └── profiler/                # Performance profiling
-│
-├── 📁 examples/                 # Example applications
-│   ├── predictive_maintenance/  # Anomaly detection example
-│   ├── optimization/            # RL control example
-│   └── classification/          # Classification example
-│
-├── 📁 docs/                     # Documentation
-│   ├── ROADMAP.md               # Development roadmap
-│   ├── ARCHITECTURE.md          # System architecture
-│   ├── DEVELOPMENT_GUIDE.md     # Developer guide
-│   └── FUNCTION_BLOCKS.md       # FB reference
-│
-├── 📁 tests/                    # Test suite
-│   ├── unit/                    # Unit tests
-│   ├── integration/             # Integration tests
-│   └── performance/             # Performance benchmarks
-│
-└── 📁 third_party/              # Third-party dependencies
-    ├── tensorflow-lite/         # TFLite Micro
-    └── onnx-runtime/            # ONNX Runtime
-```
-
----
-
 ## 🎯 Use Cases
 
 ### 1. Predictive Maintenance
