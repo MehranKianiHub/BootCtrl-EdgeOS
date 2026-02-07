@@ -88,7 +88,7 @@ make -j$(nproc)
 # Install function blocks to 4diac IDE
 cmake --install . --prefix /path/to/4diac-ide
 
----
+```
 
 ## 🎯 Use Cases
 
