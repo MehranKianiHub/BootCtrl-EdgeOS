@@ -23,6 +23,10 @@ IF(FORTE_MODULE_UTILS)
   add_subdirectory(utils)
 ENDIF()
 
+IF(FORTE_MODULE_EDGEML)
+  add_subdirectory(edgeml)
+ENDIF()
+
 IF(FORTE_COM_HTTP)
   add_subdirectory(HTTP)
 ENDIF()
