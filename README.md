@@ -25,6 +25,20 @@ Whether you're controlling refrigeration systems, robotic arms, or smart grids, 
 
 ---
 
+## Repository Layout
+
+```
+BootCtrl-EdgeOS/
+|- 4diacFORTE/      # git submodule (upstream FORTE runtime)
+|- 4diacFBE/        # git submodule (upstream FBE)
+|- configurations/  
+|- modules/
+|  |- edgeml/      
+|- tests/
+|  |- edgeml/      
+|- CMakeLists.txt   # superproject integration
+```
+
 ## 🏗️ Architecture Overview
 
 ```
@@ -76,18 +90,31 @@ Whether you're controlling refrigeration systems, robotic arms, or smart grids, 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/MehranKianiHub/BootCtrl-EdgeOS.git
+git clone --recurse-submodules https://github.com/MehranKianiHub/BootCtrl-EdgeOS.git
 cd BootCtrl-EdgeOS
+```
 
-# Build with 4diac FORTE
-mkdir build && cd build
-cmake .. -DFORTE_PATH=/path/to/forte
-make -j$(nproc)
+If you already cloned without `--recurse-submodules`:
 
-# Install function blocks to 4diac IDE
-cmake --install . --prefix /path/to/4diac-ide
+```bash
+git submodule update --init --recursive
+```
 
+Verify submodule state:
+
+```bash
+git submodule status
+```
+
+```bash
+cmake --preset posix-debug
+cmake --build build/posix-debug
+```
+
+## Upgrade Upstream Runtimes
+
+```bash
+git submodule update --remote --merge
 ```
 
 ## 🎯 Use Cases
