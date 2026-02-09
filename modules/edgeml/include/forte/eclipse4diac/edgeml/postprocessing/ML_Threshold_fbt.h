@@ -54,21 +54,6 @@ namespace forte::eclipse4diac::edgeml {
       CEventConnection *getEOConUnchecked(TPortId paIndex) override;
       CDataConnection **getDIConUnchecked(TPortId paIndex) override;
       CDataConnection *getDOConUnchecked(TPortId paIndex) override;
-
-      void evt_REQ(const CIEC_REAL &paIN,
-                   const CIEC_REAL &paTHRESHOLD,
-                   const CIEC_BOOL &paINCLUSIVE,
-                   CAnyBitOutputParameter<CIEC_BOOL> paEXCEEDS,
-                   COutputParameter<CIEC_REAL> paMARGIN) {
-        COutputGuard guard_paEXCEEDS(paEXCEEDS);
-        COutputGuard guard_paMARGIN(paMARGIN);
-        var_IN = paIN;
-        var_THRESHOLD = paTHRESHOLD;
-        var_INCLUSIVE = paINCLUSIVE;
-        executeEvent(scmEventREQID, nullptr);
-        *paEXCEEDS = var_EXCEEDS;
-        *paMARGIN = var_MARGIN;
-      }
   };
 
   CIEC_BOOL func_ML_Threshold(const CIEC_REAL &paIN, const CIEC_REAL &paThreshold, const CIEC_BOOL &paInclusive);

@@ -1,4 +1,0 @@
-endpoint=opc.tcp://localhost:4840
-certificate=/unknownPath/unknownPathFile
-securityMode=3
-securityPolicy=http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256

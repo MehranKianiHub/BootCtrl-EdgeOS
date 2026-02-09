@@ -1,3 +1,0 @@
-endpoint=opc.tcp://nonMatchingEnpoint:4840
-username=john
-password=doe

@@ -1,2 +1,0 @@
-#!/bin/bash
-curl https://hudson.eclipse.org/4diac/git/notifyCommit?url=https://git.eclipse.org/r/4diac/org.eclipse.4diac.forte

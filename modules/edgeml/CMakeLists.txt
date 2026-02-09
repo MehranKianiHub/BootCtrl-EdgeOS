@@ -8,10 +8,16 @@
 # SPDX-License-Identifier: EPL-2.0
 #############################################################################
 
-option(FORTE_MODULE_EDGEML "EdgeML Function Blocks and runtime support" OFF)
+if (NOT DEFINED FORTE_MODULE_EDGEML)
+    option(FORTE_MODULE_EDGEML "EdgeML Function Blocks and runtime support" ON)
+endif ()
 
 if (NOT FORTE_MODULE_EDGEML)
     return()
+endif ()
+
+if (NOT TARGET forte OR NOT TARGET forte-core)
+    message(FATAL_ERROR "The edgeml module requires 4diac FORTE targets (forte, forte-core). Add 4diacFORTE first.")
 endif ()
 
 add_library(forte-edgeml)
