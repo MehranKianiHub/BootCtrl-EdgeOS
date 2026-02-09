@@ -111,6 +111,15 @@ cmake --preset posix-debug
 cmake --build build/posix-debug
 ```
 
+## Adding submodules
+To add submodules:
+
+```bash
+git submodule add https://github.com/eclipse-4diac/4diac-forte.git 4diacFORTE
+git submodule add https://github.com/eclipse-4diac/4diac-fbe.git 4diacFBE
+git commit -m "Add submodules"
+```
+
 ## Upgrade Upstream Runtimes
 
 ```bash
