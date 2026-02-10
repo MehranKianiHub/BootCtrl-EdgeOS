@@ -7,4 +7,5 @@
 add_subdirectory(core)
 add_subdirectory(backend)
 add_subdirectory(preprocessing)
+add_subdirectory(inference)
 add_subdirectory(postprocessing)

@@ -34,6 +34,7 @@ if (BOOTCTRL_ENABLE_EDGEML)
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_Threshold_tester.cpp
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_Scale_tester.cpp
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_Normalize_tester.cpp
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_Inference_tester.cpp
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/model_registry_tester.cpp)
     endif ()
 endif ()
