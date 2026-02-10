@@ -5,6 +5,5 @@
 #############################################################################
 
 target_sources(forte-edgeml PRIVATE
-        model_registry.cpp
-        runtime_context.cpp
+        ML_ModelManager_fbt.cpp
 )

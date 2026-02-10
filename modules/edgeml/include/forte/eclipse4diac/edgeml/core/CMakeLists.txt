@@ -10,4 +10,5 @@ target_sources(forte-edgeml PUBLIC
         edgeml_status.h
         model_metadata.h
         model_registry.h
+        runtime_context.h
 )

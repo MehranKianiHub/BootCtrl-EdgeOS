@@ -49,19 +49,19 @@ namespace forte::eclipse4diac::edgeml::test {
     InferenceStats stats{};
 
     const auto loadStatus = backend.loadModel({"binary_model", "1.0.0", 3, "hash"}, {1U, 2U, 3U});
-    BOOST_TEST(EEdgeMLError::kOk == loadStatus);
+    BOOST_TEST(static_cast<int>(EEdgeMLError::kOk) == static_cast<int>(loadStatus));
 
     std::array<float, 3> input{1.0F, 2.0F, 3.0F};
     std::array<float, 3> output{0.0F, 0.0F, 0.0F};
     const auto inferStatus = backend.infer("binary_model", input, output, stats);
-    BOOST_TEST(EEdgeMLError::kOk == inferStatus);
+    BOOST_TEST(static_cast<int>(EEdgeMLError::kOk) == static_cast<int>(inferStatus));
     BOOST_TEST(output[0] == 1.0F);
     BOOST_TEST(output[1] == 2.0F);
     BOOST_TEST(output[2] == 3.0F);
     BOOST_TEST(stats.outputElements == 3U);
 
     const auto unloadStatus = backend.unloadModel("binary_model");
-    BOOST_TEST(EEdgeMLError::kOk == unloadStatus);
+    BOOST_TEST(static_cast<int>(EEdgeMLError::kOk) == static_cast<int>(unloadStatus));
   }
 
   BOOST_AUTO_TEST_SUITE_END()

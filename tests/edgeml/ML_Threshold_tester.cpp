@@ -10,6 +10,7 @@
 
 #include "../../4diacFORTE/tests/core/fbtests/fbtestfixture.h"
 #include "../../4diacFORTE/tests/forte_boost_output_support.h"
+#include "forte/datatypes/forte_bool.h"
 
 using namespace forte::literals;
 
