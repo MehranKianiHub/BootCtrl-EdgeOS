@@ -11,12 +11,16 @@
 #include "forte/eclipse4diac/edgeml/inference/ML_Inference_fbt.h"
 
 #include "forte/eclipse4diac/edgeml/backend/null_backend.h"
+#ifdef FORTE_EDGEML_BACKEND_TFLITE
+#include "forte/eclipse4diac/edgeml/backend/tflite_backend.h"
+#endif
 #include "forte/eclipse4diac/edgeml/core/model_metadata.h"
 #include "forte/eclipse4diac/edgeml/core/model_registry.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string_view>
 #include <vector>
 
 using namespace forte::literals;
@@ -56,22 +60,39 @@ namespace forte::eclipse4diac::edgeml {
           const ModelMetadata metadata{"mock.default", "0.1.0", binary.size(), "sha256:mock.default"};
 
           [[maybe_unused]] const bool inserted = mRegistry.registerModel(metadata);
-          const auto status = mBackend.loadModel(metadata, binary);
-          mReady = EEdgeMLError::kOk == status || EEdgeMLError::kModelAlreadyExists == status;
+          const auto status = mNullBackend.loadModel(metadata, binary);
+          mMockModelReady = EEdgeMLError::kOk == status || EEdgeMLError::kModelAlreadyExists == status;
         }
 
-        [[nodiscard]] bool ready() const {
-          return mReady;
+        static bool isMockModelId(std::string_view paModelId) {
+          return paModelId.starts_with("mock.");
         }
 
-        IModelBackend &backend() {
-          return mBackend;
+        [[nodiscard]] bool backendReady(const std::string_view paModelId) const {
+          if (isMockModelId(paModelId)) {
+            return mMockModelReady;
+          }
+          return true;
+        }
+
+        IModelBackend &backendForModel(const std::string_view paModelId) {
+#ifdef FORTE_EDGEML_BACKEND_TFLITE
+          if (!isMockModelId(paModelId)) {
+            return mTfliteBackend;
+          }
+#else
+          (void) paModelId;
+#endif
+          return mNullBackend;
         }
 
       private:
         ModelRegistry mRegistry;
-        NullBackend mBackend;
-        bool mReady{false};
+        NullBackend mNullBackend;
+#ifdef FORTE_EDGEML_BACKEND_TFLITE
+        TFLiteBackend mTfliteBackend;
+#endif
+        bool mMockModelReady{false};
     };
 
     InferenceRuntime &runtime() {
@@ -163,7 +184,7 @@ namespace forte::eclipse4diac::edgeml {
     }
 
     auto &inferenceRuntime = runtime();
-    if (!inferenceRuntime.ready()) {
+    if (!inferenceRuntime.backendReady(var_MODEL_ID.getStorage())) {
       setError(scmErrorBackendFailure);
       sendOutputEvent(scmEventCNFID, paECET);
       return;
@@ -175,7 +196,8 @@ namespace forte::eclipse4diac::edgeml {
     std::array<float, scmVectorWidth> output{};
     InferenceStats stats{};
 
-    const auto status = inferenceRuntime.backend().infer(var_MODEL_ID.getStorage(), input, output, stats);
+    auto &backend = inferenceRuntime.backendForModel(var_MODEL_ID.getStorage());
+    const auto status = backend.infer(var_MODEL_ID.getStorage(), input, output, stats);
     if (EEdgeMLError::kModelNotLoaded == status) {
       setError(scmErrorModelNotLoaded);
       sendOutputEvent(scmEventCNFID, paECET);
