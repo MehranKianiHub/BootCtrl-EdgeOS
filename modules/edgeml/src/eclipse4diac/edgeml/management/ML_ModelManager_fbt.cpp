@@ -75,6 +75,7 @@ namespace forte::eclipse4diac::edgeml {
       conn_INFO_VERSION(*this, 5, var_INFO_VERSION),
       conn_INFO_SIZE_BYTES(*this, 6, var_INFO_SIZE_BYTES),
       conn_INFO_SHA256(*this, 7, var_INFO_SHA256) {
+    setInitialValues();
   }
 
   void FORTE_ML_ModelManager::setInitialValues() {

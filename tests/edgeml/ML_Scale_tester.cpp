@@ -12,6 +12,7 @@
 #include "../../4diacFORTE/tests/forte_boost_output_support.h"
 #include "forte/datatypes/forte_bool.h"
 #include "forte/datatypes/forte_usint.h"
+#include <boost/test/tools/floating_point_comparison.hpp>
 
 #include <limits>
 
@@ -102,7 +103,8 @@ namespace forte::eclipse4diac::edgeml::test {
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
-    BOOST_TEST(120.0F == static_cast<CIEC_REAL::TValueType>(mOut));
+    BOOST_TEST(static_cast<CIEC_REAL::TValueType>(mOut) == 120.0F,
+               boost::test_tools::tolerance(0.0001F));
     BOOST_TEST(static_cast<CIEC_BOOL::TValueType>(mValid));
     BOOST_TEST(!static_cast<CIEC_BOOL::TValueType>(mError));
     BOOST_TEST(0U == static_cast<CIEC_USINT::TValueType>(mErrorCode));

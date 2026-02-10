@@ -45,6 +45,7 @@ namespace forte::eclipse4diac::edgeml {
       conn_INCLUSIVE(nullptr),
       conn_EXCEEDS(*this, 0, var_EXCEEDS),
       conn_MARGIN(*this, 1, var_MARGIN) {
+    setInitialValues();
   }
 
   void FORTE_ML_Threshold::setInitialValues() {

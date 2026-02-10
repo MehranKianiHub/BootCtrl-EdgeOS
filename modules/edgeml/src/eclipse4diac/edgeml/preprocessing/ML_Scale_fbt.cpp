@@ -58,6 +58,7 @@ namespace forte::eclipse4diac::edgeml {
       conn_VALID(*this, 1, var_VALID),
       conn_ERROR(*this, 2, var_ERROR),
       conn_ERROR_CODE(*this, 3, var_ERROR_CODE) {
+    setInitialValues();
   }
 
   void FORTE_ML_Scale::setInitialValues() {

@@ -84,7 +84,7 @@ namespace forte::eclipse4diac::edgeml::test {
   }
 
   BOOST_AUTO_TEST_CASE(modelNotLoaded) {
-    mModelId = CIEC_STRING(std::string("missing.model"));
+    mModelId = CIEC_STRING(std::string("mock.missing.model"));
     mIn0 = CIEC_REAL(1.0F);
     mIn1 = CIEC_REAL(2.0F);
     mIn2 = CIEC_REAL(3.0F);

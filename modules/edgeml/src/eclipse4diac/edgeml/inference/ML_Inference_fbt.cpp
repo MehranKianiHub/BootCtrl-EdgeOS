@@ -67,6 +67,7 @@ namespace forte::eclipse4diac::edgeml {
       conn_ERROR_CODE(*this, 6, var_ERROR_CODE),
       conn_OUTPUT_COUNT(*this, 7, var_OUTPUT_COUNT),
       conn_INFERENCE_US(*this, 8, var_INFERENCE_US) {
+    setInitialValues();
   }
 
   void FORTE_ML_Inference::setInitialValues() {
