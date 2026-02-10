@@ -7,5 +7,6 @@
 target_sources(forte-edgeml PUBLIC
         FILE_SET HEADERS
         FILES
+        ML_OTAUpdate_fbt.h
         ML_ModelManager_fbt.h
 )

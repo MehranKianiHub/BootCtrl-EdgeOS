@@ -40,6 +40,7 @@ if (BOOTCTRL_ENABLE_EDGEML)
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_Normalize_tester.cpp
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_Inference_tester.cpp
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_ModelManager_tester.cpp
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/ML_OTAUpdate_tester.cpp
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/tflite_backend_tester.cpp
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/edgeml/model_registry_tester.cpp)
     endif ()
