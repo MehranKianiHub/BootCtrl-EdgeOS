@@ -10,6 +10,7 @@
 
 #include "forte/eclipse4diac/edgeml/core/ota_persistence.h"
 
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -30,17 +31,15 @@ namespace forte::eclipse4diac::edgeml {
         return false;
       }
 
-      std::size_t consumed = 0U;
-      try {
-        const auto parsed = std::stoull(paValue, &consumed, 10);
-        if (consumed != paValue.size()) {
-          return false;
-        }
-        paOut = parsed;
-        return true;
-      } catch (...) {
+      std::uint64_t parsed = 0U;
+      const auto *begin = paValue.data();
+      const auto *end = begin + paValue.size();
+      const auto result = std::from_chars(begin, end, parsed, 10);
+      if (result.ec != std::errc{} || result.ptr != end) {
         return false;
       }
+      paOut = parsed;
+      return true;
     }
 
     bool parseBool(const std::string &paValue, bool &paOut) {

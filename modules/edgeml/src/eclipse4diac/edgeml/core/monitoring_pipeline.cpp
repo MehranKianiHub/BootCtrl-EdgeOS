@@ -11,6 +11,7 @@
 #include "forte/eclipse4diac/edgeml/core/monitoring_pipeline.h"
 
 #include <array>
+#include <charconv>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -25,17 +26,15 @@ namespace forte::eclipse4diac::edgeml {
         return false;
       }
 
-      std::size_t consumed = 0;
-      try {
-        const auto parsed = std::stoull(paToken, &consumed, 10);
-        if (consumed != paToken.size()) {
-          return false;
-        }
-        paValue = parsed;
-        return true;
-      } catch (...) {
+      std::uint64_t parsed = 0U;
+      const auto *begin = paToken.data();
+      const auto *end = begin + paToken.size();
+      const auto result = std::from_chars(begin, end, parsed, 10);
+      if (result.ec != std::errc{} || result.ptr != end) {
         return false;
       }
+      paValue = parsed;
+      return true;
     }
 
     std::string toCsvLine(const MonitoringPersistentMetrics &paMetrics) {

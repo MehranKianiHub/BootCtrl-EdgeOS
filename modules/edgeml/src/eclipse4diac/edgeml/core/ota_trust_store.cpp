@@ -10,6 +10,7 @@
 
 #include "forte/eclipse4diac/edgeml/core/ota_trust_store.h"
 
+#include <charconv>
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
@@ -20,6 +21,22 @@
 namespace forte::eclipse4diac::edgeml {
   namespace {
     constexpr std::uint32_t cFileSchemaVersion = 1U;
+
+    bool parseUnsigned(const std::string &paValue, std::uint32_t &paOut) {
+      if (paValue.empty()) {
+        return false;
+      }
+
+      std::uint32_t parsed = 0U;
+      const auto *begin = paValue.data();
+      const auto *end = begin + paValue.size();
+      const auto result = std::from_chars(begin, end, parsed, 10);
+      if (result.ec != std::errc{} || result.ptr != end) {
+        return false;
+      }
+      paOut = parsed;
+      return true;
+    }
 
     bool isValidAnchorId(const std::string &paAnchorId) {
       if (paAnchorId.empty() || paAnchorId.size() > 64U) {
@@ -127,13 +144,8 @@ namespace forte::eclipse4diac::edgeml {
         const auto key = line.substr(0U, separator);
         const auto value = line.substr(separator + 1U);
         if ("schema_version" == key) {
-          std::size_t consumed = 0U;
-          try {
-            const auto parsedVersion = std::stoul(value, &consumed, 10);
-            if (consumed != value.size() || cFileSchemaVersion != parsedVersion) {
-              return EOtaTrustStoreStatus::kParseError;
-            }
-          } catch (...) {
+          std::uint32_t parsedVersion = 0U;
+          if (!parseUnsigned(value, parsedVersion) || cFileSchemaVersion != parsedVersion) {
             return EOtaTrustStoreStatus::kParseError;
           }
           hasSchema = true;
