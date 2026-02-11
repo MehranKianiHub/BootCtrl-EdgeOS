@@ -20,6 +20,7 @@ namespace forte::eclipse4diac::edgeml {
       std::string previousActiveModelId;
       std::string stagedModelId;
       std::string stagedVersion;
+      std::string lastAppliedNonce;
       bool rollbackAvailable;
       std::uint8_t state;
       std::uint32_t expectedSize;

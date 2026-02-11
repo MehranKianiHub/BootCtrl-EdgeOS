@@ -13,11 +13,15 @@
 #include "forte/eclipse4diac/edgeml/core/model_metadata.h"
 #include "forte/eclipse4diac/edgeml/core/ota_persistence.h"
 #include "forte/eclipse4diac/edgeml/core/ota_security.h"
+#include "forte/eclipse4diac/edgeml/core/ota_trust_store.h"
 #include "forte/eclipse4diac/edgeml/core/runtime_context.h"
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -26,6 +30,7 @@ using namespace forte::literals;
 namespace forte::eclipse4diac::edgeml {
   namespace {
     constexpr auto cDefaultStatePath = "./edgeml_ota_state.dat";
+    constexpr auto cDefaultTrustStorePath = "./edgeml_trust_store.dat";
 
     const auto cDataInputNames = std::array{"COMMAND"_STRID,
                                              "MODEL_ID"_STRID,
@@ -34,6 +39,11 @@ namespace forte::eclipse4diac::edgeml {
                                              "EXPECTED_SHA256"_STRID,
                                              "SIGNATURE"_STRID,
                                              "TRUST_ANCHOR"_STRID,
+                                             "TRUST_ANCHOR_ID"_STRID,
+                                             "TRUST_STORE_PATH"_STRID,
+                                             "SOURCE_URI"_STRID,
+                                             "TRANSPORT_SECURE"_STRID,
+                                             "NONCE"_STRID,
                                              "STATE_PATH"_STRID,
                                              "CHUNK"_STRID};
     const auto cDataOutputNames = std::array{"STATE"_STRID,
@@ -93,6 +103,41 @@ namespace forte::eclipse4diac::edgeml {
       }
       return true;
     }
+
+    bool hasSecureScheme(const std::string_view paUri) {
+      constexpr std::array<std::string_view, 5> cSecureSchemes = {"https://", "mqtts://", "coaps://", "ftps://",
+                                                                   "sftp://"};
+      for (const auto scheme : cSecureSchemes) {
+        if (paUri.starts_with(scheme)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    bool isValidNonceValue(const std::string &paNonce) {
+      if (paNonce.empty() || paNonce.size() > 128U) {
+        return false;
+      }
+
+      for (const auto raw : paNonce) {
+        const auto character = static_cast<unsigned char>(raw);
+        if (std::isalnum(character) != 0 || '_' == raw || '-' == raw || '.' == raw || ':' == raw) {
+          continue;
+        }
+        return false;
+      }
+      return true;
+    }
+
+    CIEC_USINT::TValueType mapTrustStoreError(const EOtaTrustStoreStatus paStatus) {
+      switch (paStatus) {
+        case EOtaTrustStoreStatus::kNotFound: return FORTE_ML_OTAUpdate::scmErrorTrustAnchorUnavailable;
+        case EOtaTrustStoreStatus::kInvalidAnchorId:
+        case EOtaTrustStoreStatus::kInvalidPath: return FORTE_ML_OTAUpdate::scmErrorInvalidPayload;
+        default: return FORTE_ML_OTAUpdate::scmErrorTrustStoreFailure;
+      }
+    }
   } // namespace
 
   DEFINE_FIRMWARE_FB(FORTE_ML_OTAUpdate, "eclipse4diac::edgeml::ML_OTAUpdate"_STRID)
@@ -107,6 +152,11 @@ namespace forte::eclipse4diac::edgeml {
       conn_EXPECTED_SHA256(nullptr),
       conn_SIGNATURE(nullptr),
       conn_TRUST_ANCHOR(nullptr),
+      conn_TRUST_ANCHOR_ID(nullptr),
+      conn_TRUST_STORE_PATH(nullptr),
+      conn_SOURCE_URI(nullptr),
+      conn_TRANSPORT_SECURE(nullptr),
+      conn_NONCE(nullptr),
       conn_STATE_PATH(nullptr),
       conn_CHUNK(nullptr),
       conn_STATE(*this, 0, var_STATE),
@@ -131,6 +181,11 @@ namespace forte::eclipse4diac::edgeml {
     var_EXPECTED_SHA256 = CIEC_STRING(std::string(""));
     var_SIGNATURE = CIEC_STRING(std::string(""));
     var_TRUST_ANCHOR = CIEC_STRING(std::string(""));
+    var_TRUST_ANCHOR_ID = CIEC_STRING(std::string(""));
+    var_TRUST_STORE_PATH = CIEC_STRING(std::string(cDefaultTrustStorePath));
+    var_SOURCE_URI = CIEC_STRING(std::string(""));
+    var_TRANSPORT_SECURE = CIEC_BOOL(false);
+    var_NONCE = CIEC_STRING(std::string(""));
     var_STATE_PATH = CIEC_STRING(std::string(cDefaultStatePath));
     var_CHUNK.setValue(makeEmptyByteArray());
 
@@ -149,10 +204,15 @@ namespace forte::eclipse4diac::edgeml {
     mStagedExpectedSha256.clear();
     mStagedSignature.clear();
     mStagedTrustAnchor.clear();
+    mStagedTrustAnchorId.clear();
+    mStagedSourceUri.clear();
+    mStagedNonce.clear();
     mStagedBlob.clear();
     mActiveModelId = "mock.default";
     mPreviousActiveModelId.clear();
     mStatePath = cDefaultStatePath;
+    mTrustStorePath = cDefaultTrustStorePath;
+    mLastAppliedNonce.clear();
     mExpectedSize = 0U;
     mRollbackAvailable = false;
 
@@ -181,6 +241,9 @@ namespace forte::eclipse4diac::edgeml {
     mStagedExpectedSha256.clear();
     mStagedSignature.clear();
     mStagedTrustAnchor.clear();
+    mStagedTrustAnchorId.clear();
+    mStagedSourceUri.clear();
+    mStagedNonce.clear();
     mStagedBlob.clear();
     mExpectedSize = 0U;
 
@@ -201,12 +264,41 @@ namespace forte::eclipse4diac::edgeml {
     var_PROGRESS = CIEC_USINT(bounded);
   }
 
+  bool FORTE_ML_OTAUpdate::validateTransportPolicy() const {
+    if (!static_cast<CIEC_BOOL::TValueType>(var_TRANSPORT_SECURE)) {
+      return false;
+    }
+
+    const auto sourceUri = var_SOURCE_URI.getStorage();
+    if (sourceUri.empty()) {
+      return false;
+    }
+
+    std::string canonicalUri(sourceUri);
+    std::transform(canonicalUri.begin(), canonicalUri.end(), canonicalUri.begin(),
+                   [](const unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    return hasSecureScheme(canonicalUri);
+  }
+
+  bool FORTE_ML_OTAUpdate::validateNonce(std::string &paNonceOut) {
+    paNonceOut = var_NONCE.getStorage();
+    if (!isValidNonceValue(paNonceOut)) {
+      return false;
+    }
+    if (!mLastAppliedNonce.empty() && mLastAppliedNonce == paNonceOut) {
+      setError(scmErrorReplayDetected);
+      return false;
+    }
+    return true;
+  }
+
   bool FORTE_ML_OTAUpdate::persistState() {
     OtaPersistentState persistedState{
         .activeModelId = mActiveModelId,
         .previousActiveModelId = mPreviousActiveModelId,
         .stagedModelId = mStagedModelId,
         .stagedVersion = mStagedVersion,
+        .lastAppliedNonce = mLastAppliedNonce,
         .rollbackAvailable = mRollbackAvailable,
         .state = static_cast<std::uint8_t>(var_STATE),
         .expectedSize = static_cast<std::uint32_t>(mExpectedSize),
@@ -249,6 +341,10 @@ namespace forte::eclipse4diac::edgeml {
     mStagedExpectedSha256.clear();
     mStagedSignature.clear();
     mStagedTrustAnchor.clear();
+    mStagedTrustAnchorId.clear();
+    mStagedSourceUri.clear();
+    mStagedNonce.clear();
+    mLastAppliedNonce = recoveredState.lastAppliedNonce;
     mExpectedSize = static_cast<CIEC_UDINT::TValueType>(recoveredState.expectedSize);
     mStagedBlob.clear();
     mRollbackAvailable = recoveredState.rollbackAvailable;
@@ -289,6 +385,9 @@ namespace forte::eclipse4diac::edgeml {
     if (!var_STATE_PATH.empty()) {
       mStatePath = var_STATE_PATH.getStorage();
     }
+    if (!var_TRUST_STORE_PATH.empty()) {
+      mTrustStorePath = var_TRUST_STORE_PATH.getStorage();
+    }
     var_ROLLBACK_AVAILABLE = CIEC_BOOL(mRollbackAvailable);
 
     auto &runtime = EdgeMLRuntime::instance();
@@ -311,11 +410,27 @@ namespace forte::eclipse4diac::edgeml {
           break;
         }
 
+        if (!validateTransportPolicy()) {
+          setError(scmErrorTransportPolicyViolation);
+          break;
+        }
+
+        std::string nonce;
+        if (!validateNonce(nonce)) {
+          if (scmErrorOk == static_cast<CIEC_USINT::TValueType>(var_ERROR_CODE)) {
+            setError(scmErrorInvalidPayload);
+          }
+          break;
+        }
+
         mStagedModelId = modelId;
         mStagedVersion = var_VERSION.getStorage();
         mStagedExpectedSha256 = var_EXPECTED_SHA256.getStorage();
         mStagedSignature = var_SIGNATURE.getStorage();
         mStagedTrustAnchor = var_TRUST_ANCHOR.getStorage();
+        mStagedTrustAnchorId = var_TRUST_ANCHOR_ID.getStorage();
+        mStagedSourceUri = var_SOURCE_URI.getStorage();
+        mStagedNonce = nonce;
         mStagedBlob.clear();
         mExpectedSize = static_cast<CIEC_UDINT::TValueType>(var_EXPECTED_SIZE);
 
@@ -391,19 +506,37 @@ namespace forte::eclipse4diac::edgeml {
           break;
         }
 
-        if (mStagedSignature.empty() || mStagedTrustAnchor.empty()) {
+        if (mStagedSignature.empty()) {
           setError(scmErrorInvalidPayload);
           break;
         }
 
+        std::string trustAnchor = mStagedTrustAnchor;
+        if (!mStagedTrustAnchorId.empty()) {
+          const auto trustStatus = OtaTrustStore::getAnchor(mTrustStorePath, mStagedTrustAnchorId, trustAnchor);
+          if (EOtaTrustStoreStatus::kOk != trustStatus) {
+            setError(mapTrustStoreError(trustStatus));
+            break;
+          }
+        }
+        if (trustAnchor.empty()) {
+          setError(scmErrorTrustAnchorUnavailable);
+          break;
+        }
+
         const auto normalizedSignature = OtaSecurity::normalizeHexDigest(mStagedSignature);
-        const auto expectedSignature = OtaSecurity::deriveSignature(payloadDigest, mStagedTrustAnchor);
+        const auto expectedSignature = OtaSecurity::deriveSignature(payloadDigest, trustAnchor);
         if (normalizedSignature.empty() || expectedSignature.empty()) {
           setError(scmErrorInvalidPayload);
           break;
         }
         if (!OtaSecurity::constantTimeEqual(normalizedSignature, expectedSignature)) {
           setError(scmErrorSignatureMismatch);
+          break;
+        }
+
+        if (!mLastAppliedNonce.empty() && mLastAppliedNonce == mStagedNonce) {
+          setError(scmErrorReplayDetected);
           break;
         }
 
@@ -417,6 +550,7 @@ namespace forte::eclipse4diac::edgeml {
 
         mPreviousActiveModelId = mActiveModelId;
         mActiveModelId = mStagedModelId;
+        mLastAppliedNonce = mStagedNonce;
         mRollbackAvailable = !mPreviousActiveModelId.empty() && mPreviousActiveModelId != mActiveModelId;
 
         var_ACTIVE_MODEL_ID = CIEC_STRING(mActiveModelId);
@@ -470,6 +604,33 @@ namespace forte::eclipse4diac::edgeml {
         break;
       }
 
+      case scmCommandProvisionAnchor: {
+        if (var_TRUST_ANCHOR_ID.empty() || var_TRUST_ANCHOR.empty()) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
+
+        const auto status = OtaTrustStore::putAnchor(mTrustStorePath, var_TRUST_ANCHOR_ID.getStorage(),
+                                                     var_TRUST_ANCHOR.getStorage());
+        if (EOtaTrustStoreStatus::kOk != status) {
+          setError(mapTrustStoreError(status));
+        }
+        break;
+      }
+
+      case scmCommandRemoveAnchor: {
+        if (var_TRUST_ANCHOR_ID.empty()) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
+
+        const auto status = OtaTrustStore::removeAnchor(mTrustStorePath, var_TRUST_ANCHOR_ID.getStorage());
+        if (EOtaTrustStoreStatus::kOk != status) {
+          setError(mapTrustStoreError(status));
+        }
+        break;
+      }
+
       default: {
         setError(scmErrorInvalidCommand);
         break;
@@ -489,8 +650,13 @@ namespace forte::eclipse4diac::edgeml {
         readData(4, var_EXPECTED_SHA256, conn_EXPECTED_SHA256);
         readData(5, var_SIGNATURE, conn_SIGNATURE);
         readData(6, var_TRUST_ANCHOR, conn_TRUST_ANCHOR);
-        readData(7, var_STATE_PATH, conn_STATE_PATH);
-        readData(8, var_CHUNK, conn_CHUNK);
+        readData(7, var_TRUST_ANCHOR_ID, conn_TRUST_ANCHOR_ID);
+        readData(8, var_TRUST_STORE_PATH, conn_TRUST_STORE_PATH);
+        readData(9, var_SOURCE_URI, conn_SOURCE_URI);
+        readData(10, var_TRANSPORT_SECURE, conn_TRANSPORT_SECURE);
+        readData(11, var_NONCE, conn_NONCE);
+        readData(12, var_STATE_PATH, conn_STATE_PATH);
+        readData(13, var_CHUNK, conn_CHUNK);
         break;
       }
       default: break;
@@ -524,8 +690,13 @@ namespace forte::eclipse4diac::edgeml {
       case 4: return &var_EXPECTED_SHA256;
       case 5: return &var_SIGNATURE;
       case 6: return &var_TRUST_ANCHOR;
-      case 7: return &var_STATE_PATH;
-      case 8: return &var_CHUNK;
+      case 7: return &var_TRUST_ANCHOR_ID;
+      case 8: return &var_TRUST_STORE_PATH;
+      case 9: return &var_SOURCE_URI;
+      case 10: return &var_TRANSPORT_SECURE;
+      case 11: return &var_NONCE;
+      case 12: return &var_STATE_PATH;
+      case 13: return &var_CHUNK;
     }
     return nullptr;
   }
@@ -561,8 +732,13 @@ namespace forte::eclipse4diac::edgeml {
       case 4: return &conn_EXPECTED_SHA256;
       case 5: return &conn_SIGNATURE;
       case 6: return &conn_TRUST_ANCHOR;
-      case 7: return &conn_STATE_PATH;
-      case 8: return &conn_CHUNK;
+      case 7: return &conn_TRUST_ANCHOR_ID;
+      case 8: return &conn_TRUST_STORE_PATH;
+      case 9: return &conn_SOURCE_URI;
+      case 10: return &conn_TRANSPORT_SECURE;
+      case 11: return &conn_NONCE;
+      case 12: return &conn_STATE_PATH;
+      case 13: return &conn_CHUNK;
     }
     return nullptr;
   }

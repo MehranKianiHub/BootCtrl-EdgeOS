@@ -13,5 +13,6 @@ target_sources(forte-edgeml PUBLIC
         monitoring_pipeline.h
         ota_persistence.h
         ota_security.h
+        ota_trust_store.h
         runtime_context.h
 )

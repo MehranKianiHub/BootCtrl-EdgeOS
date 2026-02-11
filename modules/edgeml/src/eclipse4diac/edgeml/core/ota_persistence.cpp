@@ -18,7 +18,8 @@
 
 namespace forte::eclipse4diac::edgeml {
   namespace {
-    constexpr std::uint32_t cFileSchemaVersion = 1U;
+    constexpr std::uint32_t cFileSchemaVersion = 2U;
+    constexpr std::uint32_t cLegacySchemaVersion = 1U;
 
     std::string stringifyBool(const bool paValue) {
       return paValue ? "1" : "0";
@@ -62,7 +63,8 @@ namespace forte::eclipse4diac::edgeml {
       }
 
       std::uint64_t parsedVersion = 0U;
-      if (!parseUnsigned(versionIt->second, parsedVersion) || cFileSchemaVersion != parsedVersion) {
+      if (!parseUnsigned(versionIt->second, parsedVersion) ||
+          (cLegacySchemaVersion != parsedVersion && cFileSchemaVersion != parsedVersion)) {
         return EOtaPersistenceStatus::kParseError;
       }
 
@@ -70,12 +72,17 @@ namespace forte::eclipse4diac::edgeml {
       const auto previousIt = paKv.find("previous_active_model_id");
       const auto stagedIdIt = paKv.find("staged_model_id");
       const auto stagedVersionIt = paKv.find("staged_version");
+      const auto nonceIt = paKv.find("last_applied_nonce");
       const auto rollbackIt = paKv.find("rollback_available");
       const auto stateIt = paKv.find("state");
       const auto expectedSizeIt = paKv.find("expected_size");
       const auto stagedSizeIt = paKv.find("staged_size");
       if (paKv.end() == activeIt || paKv.end() == previousIt || paKv.end() == stagedIdIt || paKv.end() == stagedVersionIt ||
           paKv.end() == rollbackIt || paKv.end() == stateIt || paKv.end() == expectedSizeIt || paKv.end() == stagedSizeIt) {
+        return EOtaPersistenceStatus::kParseError;
+      }
+
+      if (cFileSchemaVersion == parsedVersion && paKv.end() == nonceIt) {
         return EOtaPersistenceStatus::kParseError;
       }
 
@@ -98,6 +105,7 @@ namespace forte::eclipse4diac::edgeml {
       paState.previousActiveModelId = previousIt->second;
       paState.stagedModelId = stagedIdIt->second;
       paState.stagedVersion = stagedVersionIt->second;
+      paState.lastAppliedNonce = paKv.end() == nonceIt ? "" : nonceIt->second;
       paState.rollbackAvailable = rollbackAvailable;
       paState.state = static_cast<std::uint8_t>(parsedState);
       paState.expectedSize = static_cast<std::uint32_t>(parsedExpectedSize);
@@ -133,6 +141,7 @@ namespace forte::eclipse4diac::edgeml {
       output << "previous_active_model_id=" << paState.previousActiveModelId << '\n';
       output << "staged_model_id=" << paState.stagedModelId << '\n';
       output << "staged_version=" << paState.stagedVersion << '\n';
+      output << "last_applied_nonce=" << paState.lastAppliedNonce << '\n';
       output << "rollback_available=" << stringifyBool(paState.rollbackAvailable) << '\n';
       output << "state=" << static_cast<std::uint32_t>(paState.state) << '\n';
       output << "expected_size=" << paState.expectedSize << '\n';
