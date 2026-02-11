@@ -27,6 +27,9 @@ set(FORTE_EDGEML_TFLITE_INCLUDE_DIR
 set(FORTE_EDGEML_TFLITE_LIBRARY
     ""
     CACHE FILEPATH "Path to TensorFlow Lite library file (e.g. libtensorflowlite.so)")
+set(FORTE_EDGEML_TFLITE_EXTRA_LIBRARIES
+    ""
+    CACHE STRING "Optional semicolon-separated list of additional TFLite dependency libraries (e.g. Abseil)")
 set(FORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR
     ""
     CACHE PATH "Optional FlatBuffers include path containing flatbuffers/flatbuffers.h for TFLite source builds")
@@ -41,6 +44,7 @@ set(FORTE_EDGEML_BACKEND_TFLITE_ACTIVE OFF CACHE INTERNAL "Whether TFLite backen
 if (FORTE_EDGEML_BACKEND_TFLITE)
     set(_edgeml_tflite_include "")
     set(_edgeml_tflite_library "")
+    set(_edgeml_tflite_link_libraries "")
 
     if (FORTE_EDGEML_TFLITE_INCLUDE_DIR)
         if (EXISTS "${FORTE_EDGEML_TFLITE_INCLUDE_DIR}/tensorflow/lite/interpreter.h")
@@ -58,6 +62,7 @@ if (FORTE_EDGEML_BACKEND_TFLITE)
     if (FORTE_EDGEML_TFLITE_LIBRARY)
         if (EXISTS "${FORTE_EDGEML_TFLITE_LIBRARY}")
             set(_edgeml_tflite_library "${FORTE_EDGEML_TFLITE_LIBRARY}")
+            list(APPEND _edgeml_tflite_link_libraries "${FORTE_EDGEML_TFLITE_LIBRARY}")
         else ()
             message(STATUS "EdgeML: FORTE_EDGEML_TFLITE_LIBRARY is set but invalid: ${FORTE_EDGEML_TFLITE_LIBRARY}")
         endif ()
@@ -74,7 +79,18 @@ if (FORTE_EDGEML_BACKEND_TFLITE)
         set(_edgeml_tflite_library "")
     endif ()
 
-    if (_edgeml_tflite_include AND _edgeml_tflite_library)
+    if (FORTE_EDGEML_TFLITE_EXTRA_LIBRARIES)
+        foreach (_edgeml_extra_library IN LISTS FORTE_EDGEML_TFLITE_EXTRA_LIBRARIES)
+            if (EXISTS "${_edgeml_extra_library}")
+                list(APPEND _edgeml_tflite_link_libraries "${_edgeml_extra_library}")
+            else ()
+                message(STATUS "EdgeML: Ignoring missing FORTE_EDGEML_TFLITE_EXTRA_LIBRARIES entry: ${_edgeml_extra_library}")
+            endif ()
+        endforeach ()
+    endif ()
+    list(REMOVE_DUPLICATES _edgeml_tflite_link_libraries)
+
+    if (_edgeml_tflite_include AND _edgeml_tflite_library AND _edgeml_tflite_link_libraries)
         set(FORTE_EDGEML_BACKEND_TFLITE_ACTIVE ON CACHE INTERNAL "Whether TFLite backend is active for this build" FORCE)
         set(_edgeml_tflite_extra_includes "")
         if (FORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR AND
@@ -105,9 +121,11 @@ if (FORTE_EDGEML_BACKEND_TFLITE)
                                        PUBLIC
                                        $<BUILD_INTERFACE:${_edgeml_extra_include}>)
         endforeach ()
-        target_link_libraries(forte-edgeml
-                              PUBLIC
-                              $<BUILD_INTERFACE:${_edgeml_tflite_library}>)
+        foreach (_edgeml_link_library IN LISTS _edgeml_tflite_link_libraries)
+            target_link_libraries(forte-edgeml
+                                  PUBLIC
+                                  $<BUILD_INTERFACE:${_edgeml_link_library}>)
+        endforeach ()
         target_compile_definitions(forte-edgeml PUBLIC FORTE_EDGEML_BACKEND_TFLITE=1)
         message(STATUS "EdgeML: TFLite backend enabled")
     else ()

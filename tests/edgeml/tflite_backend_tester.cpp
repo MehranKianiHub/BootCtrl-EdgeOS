@@ -28,7 +28,7 @@ namespace forte::eclipse4diac::edgeml::test {
     InferenceStats stats{};
 
     const auto status = backend.infer("missing.tflite", input, output, stats);
-    BOOST_TEST(EEdgeMLError::kModelNotLoaded == status);
+    BOOST_TEST(static_cast<int>(EEdgeMLError::kModelNotLoaded) == static_cast<int>(status));
   }
 
   BOOST_AUTO_TEST_CASE(loadFailsOnEmptyBinary) {
@@ -36,14 +36,14 @@ namespace forte::eclipse4diac::edgeml::test {
     const ModelMetadata metadata{"demo.tflite", "1.0.0", 0U, ""};
     const auto status = backend.loadModel(metadata, {});
 
-    BOOST_TEST(EEdgeMLError::kInvalidInput == status);
+    BOOST_TEST(static_cast<int>(EEdgeMLError::kInvalidInput) == static_cast<int>(status));
   }
 
   BOOST_AUTO_TEST_CASE(unloadMissingModel) {
     TFLiteBackend backend;
     const auto status = backend.unloadModel("unknown");
 
-    BOOST_TEST(EEdgeMLError::kModelNotFound == status);
+    BOOST_TEST(static_cast<int>(EEdgeMLError::kModelNotFound) == static_cast<int>(status));
   }
 
   BOOST_AUTO_TEST_SUITE_END()

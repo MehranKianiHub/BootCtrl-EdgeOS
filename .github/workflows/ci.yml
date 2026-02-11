@@ -64,6 +64,7 @@ jobs:
           include_dir=""
           library_path=""
           flatbuffers_include=""
+          extra_libraries=""
 
           if apt-cache show libtensorflow-lite-dev >/dev/null 2>&1; then
             sudo apt-get install -y libtensorflow-lite-dev
@@ -90,8 +91,17 @@ jobs:
             cmake --build third_party/tflite-build --target tensorflow-lite -j"$(nproc)"
 
             include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
-            library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' -o -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+            library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' \) | head -n1)"
+            if [ -z "${library_path}" ]; then
+              library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+            fi
             flatbuffers_include="${GITHUB_WORKSPACE}/third_party/flatbuffers/include"
+
+            mapfile -t _absl_libs < <(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f -name 'libabsl*.so*' | sort -u)
+            if [ "${#_absl_libs[@]}" -gt 0 ]; then
+              extra_libraries="$(printf '%s;' "${_absl_libs[@]}")"
+              extra_libraries="${extra_libraries%;}"
+            fi
           fi
 
           test -n "${include_dir}"
@@ -101,10 +111,17 @@ jobs:
           if [ -n "${flatbuffers_include}" ]; then
             test -f "${flatbuffers_include}/flatbuffers/flatbuffers.h"
           fi
+          if [ -n "${extra_libraries}" ]; then
+            IFS=';' read -r -a _extra_lib_array <<< "${extra_libraries}"
+            for _extra_lib in "${_extra_lib_array[@]}"; do
+              test -f "${_extra_lib}"
+            done
+          fi
 
           echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
           echo "library_path=${library_path}" >> "${GITHUB_OUTPUT}"
           echo "flatbuffers_include=${flatbuffers_include}" >> "${GITHUB_OUTPUT}"
+          echo "extra_libraries=${extra_libraries}" >> "${GITHUB_OUTPUT}"
 
       - name: Configure (Debug + TFLite)
         run: |
@@ -116,6 +133,7 @@ jobs:
             -DFORTE_EDGEML_BACKEND_TFLITE=ON \
             -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
             -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
+            -DFORTE_EDGEML_TFLITE_EXTRA_LIBRARIES="${{ steps.tflite.outputs.extra_libraries }}" \
             -DFORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR="${{ steps.tflite.outputs.flatbuffers_include }}" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
@@ -220,6 +238,7 @@ jobs:
           include_dir=""
           library_path=""
           flatbuffers_include=""
+          extra_libraries=""
 
           if apt-cache show libtensorflow-lite-dev >/dev/null 2>&1; then
             sudo apt-get install -y libtensorflow-lite-dev
@@ -246,8 +265,17 @@ jobs:
             cmake --build third_party/tflite-build --target tensorflow-lite -j"$(nproc)"
 
             include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
-            library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' -o -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+            library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' \) | head -n1)"
+            if [ -z "${library_path}" ]; then
+              library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+            fi
             flatbuffers_include="${GITHUB_WORKSPACE}/third_party/flatbuffers/include"
+
+            mapfile -t _absl_libs < <(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f -name 'libabsl*.so*' | sort -u)
+            if [ "${#_absl_libs[@]}" -gt 0 ]; then
+              extra_libraries="$(printf '%s;' "${_absl_libs[@]}")"
+              extra_libraries="${extra_libraries%;}"
+            fi
           fi
 
           test -n "${include_dir}"
@@ -257,10 +285,17 @@ jobs:
           if [ -n "${flatbuffers_include}" ]; then
             test -f "${flatbuffers_include}/flatbuffers/flatbuffers.h"
           fi
+          if [ -n "${extra_libraries}" ]; then
+            IFS=';' read -r -a _extra_lib_array <<< "${extra_libraries}"
+            for _extra_lib in "${_extra_lib_array[@]}"; do
+              test -f "${_extra_lib}"
+            done
+          fi
 
           echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
           echo "library_path=${library_path}" >> "${GITHUB_OUTPUT}"
           echo "flatbuffers_include=${flatbuffers_include}" >> "${GITHUB_OUTPUT}"
+          echo "extra_libraries=${extra_libraries}" >> "${GITHUB_OUTPUT}"
 
       - name: Configure (Release + TFLite)
         run: |
@@ -272,6 +307,7 @@ jobs:
             -DFORTE_EDGEML_BACKEND_TFLITE=ON \
             -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
             -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
+            -DFORTE_EDGEML_TFLITE_EXTRA_LIBRARIES="${{ steps.tflite.outputs.extra_libraries }}" \
             -DFORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR="${{ steps.tflite.outputs.flatbuffers_include }}" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
@@ -288,6 +324,7 @@ jobs:
           package_root="${BUILD_DIR}/package/${package_name}"
           artifact_dir="${BUILD_DIR}/artifacts"
           tflite_lib="${{ steps.tflite.outputs.library_path }}"
+          tflite_extra_libs="${{ steps.tflite.outputs.extra_libraries }}"
 
           rm -rf "${BUILD_DIR}/package"
           mkdir -p "${package_root}/bin" "${package_root}/lib" "${package_root}/configurations" "${artifact_dir}"
@@ -304,6 +341,14 @@ jobs:
             for candidate in "$(dirname "${tflite_lib_real}")"/libtensorflow-lite.so* "$(dirname "${tflite_lib_real}")"/libtensorflowlite.so*; do
               if [ -f "${candidate}" ] || [ -L "${candidate}" ]; then
                 cp -P "${candidate}" "${package_root}/lib/" || true
+              fi
+            done
+          fi
+          if [ -n "${tflite_extra_libs}" ]; then
+            IFS=';' read -r -a _extra_lib_array <<< "${tflite_extra_libs}"
+            for _extra_lib in "${_extra_lib_array[@]}"; do
+              if [ -f "${_extra_lib}" ] || [ -L "${_extra_lib}" ]; then
+                cp -P "${_extra_lib}" "${package_root}/lib/" || true
               fi
             done
           fi
