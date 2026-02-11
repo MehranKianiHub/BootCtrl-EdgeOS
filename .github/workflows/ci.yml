@@ -1,0 +1,315 @@
+name: BootCtrl EdgeOS CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: edgeos-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tflite-tests:
+    name: Test / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      BUILD_DIR: build/ci-debug-tflite-${{ matrix.arch }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Build Dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            g++ \
+            gcc \
+            make \
+            pkg-config \
+            git \
+            python3 \
+            python3-pip \
+            libboost-test-dev
+
+      - name: Install CMake 3.30+
+        run: |
+          set -euxo pipefail
+          python3 -m pip install --user --break-system-packages "cmake>=3.30,<3.32"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          "${HOME}/.local/bin/cmake" --version
+
+      - name: Provision TensorFlow Lite
+        id: tflite
+        run: |
+          set -euxo pipefail
+
+          include_dir=""
+          library_path=""
+
+          if apt-cache show libtensorflow-lite-dev >/dev/null 2>&1; then
+            sudo apt-get install -y libtensorflow-lite-dev
+            include_dir="$(dpkg -L libtensorflow-lite-dev | grep '/tensorflow/lite/interpreter.h$' | head -n1 | sed 's#/tensorflow/lite/interpreter.h##')"
+            library_path="$(ldconfig -p | awk '/libtensorflowlite\.so/{print $NF; exit}')"
+          fi
+
+          if [ -z "${include_dir}" ] || [ -z "${library_path}" ] || [ ! -f "${include_dir}/tensorflow/lite/interpreter.h" ] || [ ! -f "${library_path}" ]; then
+            rm -rf third_party/tensorflow third_party/tflite-build
+            git clone --depth=1 https://github.com/tensorflow/tensorflow.git third_party/tensorflow
+            cmake -S third_party/tensorflow/tensorflow/lite \
+              -B third_party/tflite-build \
+              -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON \
+              -DTFLITE_ENABLE_XNNPACK=OFF
+            cmake --build third_party/tflite-build --target tensorflow-lite -j"$(nproc)"
+
+            include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
+            library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' -o -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+          fi
+
+          test -n "${include_dir}"
+          test -n "${library_path}"
+          test -f "${include_dir}/tensorflow/lite/interpreter.h"
+          test -f "${library_path}"
+
+          echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
+          echo "library_path=${library_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Configure (Debug + TFLite)
+        run: |
+          set -euxo pipefail
+          cmake -S . -B "${BUILD_DIR}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBOOTCTRL_ENABLE_EDGEML=ON \
+            -DFORTE_TESTS=ON \
+            -DFORTE_EDGEML_BACKEND_TFLITE=ON \
+            -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
+            -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
+
+      - name: Build
+        run: |
+          set -euxo pipefail
+          cmake --build "${BUILD_DIR}" -j"$(nproc)"
+
+      - name: Run Full Test Suite
+        run: |
+          set -euxo pipefail
+          mkdir -p "${BUILD_DIR}/artifacts/logs"
+          "${BUILD_DIR}/4diacFORTE/tests/forte_test" \
+            > "${BUILD_DIR}/artifacts/logs/forte_test_full.log" 2>&1
+
+      - name: Run Stress Suite
+        run: |
+          set -euxo pipefail
+          mkdir -p "${BUILD_DIR}/artifacts/logs"
+          : > "${BUILD_DIR}/artifacts/logs/forte_test_stress.log"
+          for iteration in $(seq 1 5); do
+            echo "[stress] iteration=${iteration}" >> "${BUILD_DIR}/artifacts/logs/forte_test_stress.log"
+            "${BUILD_DIR}/4diacFORTE/tests/forte_test" \
+              --run_test='ModelRegistryTests/modelRegistryConcurrentAccess' \
+              --report_level=no \
+              --log_level=nothing \
+              >> "${BUILD_DIR}/artifacts/logs/forte_test_stress.log" 2>&1
+            "${BUILD_DIR}/4diacFORTE/tests/forte_test" \
+              --run_test='ModelRegistryTests/edgeMLRuntimeConcurrentLoadInferUnload' \
+              --report_level=no \
+              --log_level=nothing \
+              >> "${BUILD_DIR}/artifacts/logs/forte_test_stress.log" 2>&1
+          done
+
+      - name: Run TFLite Backend Focused Suite
+        run: |
+          set -euxo pipefail
+          "${BUILD_DIR}/4diacFORTE/tests/forte_test" \
+            --run_test='TFLiteBackendTests/*' \
+            > "${BUILD_DIR}/artifacts/logs/forte_test_tflite.log" 2>&1
+
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edgeos-test-debug-tflite-${{ matrix.arch }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            ${{ env.BUILD_DIR }}/artifacts/logs/*.log
+            ${{ env.BUILD_DIR }}/4diacFORTE/tests/forte_test
+            ${{ env.BUILD_DIR }}/compile_commands.json
+            ${{ env.BUILD_DIR }}/CMakeCache.txt
+
+  release-artifacts:
+    name: Release Artifact / ${{ matrix.arch }}
+    needs: tflite-tests
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      BUILD_DIR: build/ci-release-tflite-${{ matrix.arch }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Build Dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            g++ \
+            gcc \
+            make \
+            pkg-config \
+            git \
+            python3 \
+            python3-pip
+
+      - name: Install CMake 3.30+
+        run: |
+          set -euxo pipefail
+          python3 -m pip install --user --break-system-packages "cmake>=3.30,<3.32"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          "${HOME}/.local/bin/cmake" --version
+
+      - name: Provision TensorFlow Lite
+        id: tflite
+        run: |
+          set -euxo pipefail
+
+          include_dir=""
+          library_path=""
+
+          if apt-cache show libtensorflow-lite-dev >/dev/null 2>&1; then
+            sudo apt-get install -y libtensorflow-lite-dev
+            include_dir="$(dpkg -L libtensorflow-lite-dev | grep '/tensorflow/lite/interpreter.h$' | head -n1 | sed 's#/tensorflow/lite/interpreter.h##')"
+            library_path="$(ldconfig -p | awk '/libtensorflowlite\.so/{print $NF; exit}')"
+          fi
+
+          if [ -z "${include_dir}" ] || [ -z "${library_path}" ] || [ ! -f "${include_dir}/tensorflow/lite/interpreter.h" ] || [ ! -f "${library_path}" ]; then
+            rm -rf third_party/tensorflow third_party/tflite-build
+            git clone --depth=1 https://github.com/tensorflow/tensorflow.git third_party/tensorflow
+            cmake -S third_party/tensorflow/tensorflow/lite \
+              -B third_party/tflite-build \
+              -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON \
+              -DTFLITE_ENABLE_XNNPACK=OFF
+            cmake --build third_party/tflite-build --target tensorflow-lite -j"$(nproc)"
+
+            include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
+            library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' -o -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+          fi
+
+          test -n "${include_dir}"
+          test -n "${library_path}"
+          test -f "${include_dir}/tensorflow/lite/interpreter.h"
+          test -f "${library_path}"
+
+          echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
+          echo "library_path=${library_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Configure (Release + TFLite)
+        run: |
+          set -euxo pipefail
+          cmake -S . -B "${BUILD_DIR}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBOOTCTRL_ENABLE_EDGEML=ON \
+            -DFORTE_TESTS=OFF \
+            -DFORTE_EDGEML_BACKEND_TFLITE=ON \
+            -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
+            -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
+
+      - name: Build
+        run: |
+          set -euxo pipefail
+          cmake --build "${BUILD_DIR}" -j"$(nproc)"
+
+      - name: Create Deployable Tarball
+        run: |
+          set -euxo pipefail
+          package_name="bootctrl-edgeos-${{ matrix.arch }}-release-tflite"
+          package_root="${BUILD_DIR}/package/${package_name}"
+          artifact_dir="${BUILD_DIR}/artifacts"
+          tflite_lib="${{ steps.tflite.outputs.library_path }}"
+
+          rm -rf "${BUILD_DIR}/package"
+          mkdir -p "${package_root}/bin" "${package_root}/lib" "${package_root}/configurations" "${artifact_dir}"
+
+          cp "${BUILD_DIR}/4diacFORTE/forte" "${package_root}/bin/forte"
+          cp -r configurations/examples "${package_root}/configurations/examples"
+          cp -r configurations/templates "${package_root}/configurations/templates"
+          cp README.md "${package_root}/README.md"
+          cp docs/DEPLOYMENT.md "${package_root}/DEPLOYMENT.md"
+
+          if [[ "${tflite_lib}" == *.so* ]]; then
+            tflite_lib_real="$(readlink -f "${tflite_lib}")"
+            cp "${tflite_lib_real}" "${package_root}/lib/"
+            for candidate in "$(dirname "${tflite_lib_real}")"/libtensorflow-lite.so* "$(dirname "${tflite_lib_real}")"/libtensorflowlite.so*; do
+              if [ -f "${candidate}" ] || [ -L "${candidate}" ]; then
+                cp -P "${candidate}" "${package_root}/lib/" || true
+              fi
+            done
+          fi
+
+          cat > "${package_root}/run-forte.sh" <<'RUNNER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          export LD_LIBRARY_PATH="${SCRIPT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+          exec "${SCRIPT_DIR}/bin/forte" "$@"
+          RUNNER
+          chmod +x "${package_root}/run-forte.sh"
+
+          cat > "${package_root}/BUILD_INFO.txt" <<INFO
+          GIT_SHA=${GITHUB_SHA}
+          BUILD_DATE_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          RUN_ID=${GITHUB_RUN_ID}
+          ARCH=${{ matrix.arch }}
+          BACKEND=TFLITE
+          CONFIG=Release
+          INFO
+
+          tar -C "${BUILD_DIR}/package" -czf "${artifact_dir}/${package_name}.tar.gz" "${package_name}"
+          sha256sum "${artifact_dir}/${package_name}.tar.gz" > "${artifact_dir}/${package_name}.tar.gz.sha256"
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edgeos-release-tflite-${{ matrix.arch }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ env.BUILD_DIR }}/artifacts/*.tar.gz
+            ${{ env.BUILD_DIR }}/artifacts/*.sha256
+            ${{ env.BUILD_DIR }}/CMakeCache.txt
