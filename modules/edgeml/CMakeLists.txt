@@ -27,6 +27,9 @@ set(FORTE_EDGEML_TFLITE_INCLUDE_DIR
 set(FORTE_EDGEML_TFLITE_LIBRARY
     ""
     CACHE FILEPATH "Path to TensorFlow Lite library file (e.g. libtensorflowlite.so)")
+set(FORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR
+    ""
+    CACHE PATH "Optional FlatBuffers include path containing flatbuffers/flatbuffers.h for TFLite source builds")
 
 add_library(forte-edgeml)
 target_link_libraries(forte-edgeml PUBLIC forte-core)
@@ -74,10 +77,18 @@ if (FORTE_EDGEML_BACKEND_TFLITE)
     if (_edgeml_tflite_include AND _edgeml_tflite_library)
         set(FORTE_EDGEML_BACKEND_TFLITE_ACTIVE ON CACHE INTERNAL "Whether TFLite backend is active for this build" FORCE)
         set(_edgeml_tflite_extra_includes "")
+        if (FORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR AND
+            EXISTS "${FORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR}/flatbuffers/flatbuffers.h")
+            list(APPEND _edgeml_tflite_extra_includes "${FORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR}")
+        endif ()
         get_filename_component(_edgeml_tflite_library_dir "${_edgeml_tflite_library}" DIRECTORY)
+        get_filename_component(_edgeml_tflite_root_dir "${_edgeml_tflite_include}" DIRECTORY)
         foreach (_edgeml_candidate_include
                  "${_edgeml_tflite_library_dir}/flatbuffers/include"
-                 "${_edgeml_tflite_library_dir}/_deps/flatbuffers-src/include")
+                 "${_edgeml_tflite_library_dir}/_deps/flatbuffers-src/include"
+                 "${_edgeml_tflite_root_dir}/flatbuffers/include"
+                 "${_edgeml_tflite_root_dir}/tflite-build/flatbuffers/include"
+                 "${_edgeml_tflite_root_dir}/tflite-build/_deps/flatbuffers-src/include")
             if (EXISTS "${_edgeml_candidate_include}/flatbuffers/flatbuffers.h")
                 list(APPEND _edgeml_tflite_extra_includes "${_edgeml_candidate_include}")
             endif ()

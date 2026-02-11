@@ -63,11 +63,17 @@ jobs:
 
           include_dir=""
           library_path=""
+          flatbuffers_include=""
 
           if apt-cache show libtensorflow-lite-dev >/dev/null 2>&1; then
             sudo apt-get install -y libtensorflow-lite-dev
             include_dir="$(dpkg -L libtensorflow-lite-dev | grep '/tensorflow/lite/interpreter.h$' | head -n1 | sed 's#/tensorflow/lite/interpreter.h##')"
             library_path="$(ldconfig -p | awk '/libtensorflowlite\.so/{print $NF; exit}')"
+            if [ -f "${include_dir}/flatbuffers/flatbuffers.h" ]; then
+              flatbuffers_include="${include_dir}"
+            elif [ -f "/usr/include/flatbuffers/flatbuffers.h" ]; then
+              flatbuffers_include="/usr/include"
+            fi
           fi
 
           if [ -z "${include_dir}" ] || [ -z "${library_path}" ] || [ ! -f "${include_dir}/tensorflow/lite/interpreter.h" ] || [ ! -f "${library_path}" ]; then
@@ -85,15 +91,20 @@ jobs:
 
             include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
             library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' -o -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+            flatbuffers_include="${GITHUB_WORKSPACE}/third_party/flatbuffers/include"
           fi
 
           test -n "${include_dir}"
           test -n "${library_path}"
           test -f "${include_dir}/tensorflow/lite/interpreter.h"
           test -f "${library_path}"
+          if [ -n "${flatbuffers_include}" ]; then
+            test -f "${flatbuffers_include}/flatbuffers/flatbuffers.h"
+          fi
 
           echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
           echo "library_path=${library_path}" >> "${GITHUB_OUTPUT}"
+          echo "flatbuffers_include=${flatbuffers_include}" >> "${GITHUB_OUTPUT}"
 
       - name: Configure (Debug + TFLite)
         run: |
@@ -105,6 +116,7 @@ jobs:
             -DFORTE_EDGEML_BACKEND_TFLITE=ON \
             -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
             -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
+            -DFORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR="${{ steps.tflite.outputs.flatbuffers_include }}" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
 
@@ -207,11 +219,17 @@ jobs:
 
           include_dir=""
           library_path=""
+          flatbuffers_include=""
 
           if apt-cache show libtensorflow-lite-dev >/dev/null 2>&1; then
             sudo apt-get install -y libtensorflow-lite-dev
             include_dir="$(dpkg -L libtensorflow-lite-dev | grep '/tensorflow/lite/interpreter.h$' | head -n1 | sed 's#/tensorflow/lite/interpreter.h##')"
             library_path="$(ldconfig -p | awk '/libtensorflowlite\.so/{print $NF; exit}')"
+            if [ -f "${include_dir}/flatbuffers/flatbuffers.h" ]; then
+              flatbuffers_include="${include_dir}"
+            elif [ -f "/usr/include/flatbuffers/flatbuffers.h" ]; then
+              flatbuffers_include="/usr/include"
+            fi
           fi
 
           if [ -z "${include_dir}" ] || [ -z "${library_path}" ] || [ ! -f "${include_dir}/tensorflow/lite/interpreter.h" ] || [ ! -f "${library_path}" ]; then
@@ -229,15 +247,20 @@ jobs:
 
             include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
             library_path="$(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libtensorflow-lite.so' -o -name 'libtensorflowlite.so' -o -name 'libtensorflow-lite.a' -o -name 'libtensorflowlite.a' \) | head -n1)"
+            flatbuffers_include="${GITHUB_WORKSPACE}/third_party/flatbuffers/include"
           fi
 
           test -n "${include_dir}"
           test -n "${library_path}"
           test -f "${include_dir}/tensorflow/lite/interpreter.h"
           test -f "${library_path}"
+          if [ -n "${flatbuffers_include}" ]; then
+            test -f "${flatbuffers_include}/flatbuffers/flatbuffers.h"
+          fi
 
           echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
           echo "library_path=${library_path}" >> "${GITHUB_OUTPUT}"
+          echo "flatbuffers_include=${flatbuffers_include}" >> "${GITHUB_OUTPUT}"
 
       - name: Configure (Release + TFLite)
         run: |
@@ -249,6 +272,7 @@ jobs:
             -DFORTE_EDGEML_BACKEND_TFLITE=ON \
             -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
             -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
+            -DFORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR="${{ steps.tflite.outputs.flatbuffers_include }}" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
 
