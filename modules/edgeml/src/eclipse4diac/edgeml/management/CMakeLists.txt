@@ -5,6 +5,7 @@
 #############################################################################
 
 target_sources(forte-edgeml PRIVATE
+        ML_Monitoring_fbt.cpp
         ML_OTAUpdate_fbt.cpp
         ML_ModelManager_fbt.cpp
 )
