@@ -73,11 +73,27 @@ if (FORTE_EDGEML_BACKEND_TFLITE)
 
     if (_edgeml_tflite_include AND _edgeml_tflite_library)
         set(FORTE_EDGEML_BACKEND_TFLITE_ACTIVE ON CACHE INTERNAL "Whether TFLite backend is active for this build" FORCE)
+        set(_edgeml_tflite_extra_includes "")
+        get_filename_component(_edgeml_tflite_library_dir "${_edgeml_tflite_library}" DIRECTORY)
+        foreach (_edgeml_candidate_include
+                 "${_edgeml_tflite_library_dir}/flatbuffers/include"
+                 "${_edgeml_tflite_library_dir}/_deps/flatbuffers-src/include")
+            if (EXISTS "${_edgeml_candidate_include}/flatbuffers/flatbuffers.h")
+                list(APPEND _edgeml_tflite_extra_includes "${_edgeml_candidate_include}")
+            endif ()
+        endforeach ()
+        list(REMOVE_DUPLICATES _edgeml_tflite_extra_includes)
+
         # Keep fallback, CI-provisioned TFLite paths build-only so export/install does not
         # capture source-tree paths (e.g. third_party/tensorflow under workspace checkout).
         target_include_directories(forte-edgeml
                                    PUBLIC
                                    $<BUILD_INTERFACE:${_edgeml_tflite_include}>)
+        foreach (_edgeml_extra_include IN LISTS _edgeml_tflite_extra_includes)
+            target_include_directories(forte-edgeml
+                                       PUBLIC
+                                       $<BUILD_INTERFACE:${_edgeml_extra_include}>)
+        endforeach ()
         target_link_libraries(forte-edgeml
                               PUBLIC
                               $<BUILD_INTERFACE:${_edgeml_tflite_library}>)

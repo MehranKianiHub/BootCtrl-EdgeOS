@@ -146,17 +146,15 @@ jobs:
             --run_test='TFLiteBackendTests/*' \
             > "${BUILD_DIR}/artifacts/logs/forte_test_tflite.log" 2>&1
 
-      - name: Upload Test Artifacts
+      - name: Upload Test Diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: edgeos-test-debug-tflite-${{ matrix.arch }}
+          name: edgeos-test-diagnostics-debug-tflite-${{ matrix.arch }}
           retention-days: 14
           if-no-files-found: warn
           path: |
             ${{ env.BUILD_DIR }}/artifacts/logs/*.log
-            ${{ env.BUILD_DIR }}/4diacFORTE/tests/forte_test
-            ${{ env.BUILD_DIR }}/compile_commands.json
             ${{ env.BUILD_DIR }}/CMakeCache.txt
 
   release-artifacts:
