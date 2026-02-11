@@ -404,8 +404,22 @@ jobs:
           mkdir -p "${package_root}/bin" "${package_root}/lib" "${package_root}/configurations" "${artifact_dir}"
 
           cp "${BUILD_DIR}/4diacFORTE/forte" "${package_root}/bin/forte"
-          cp README.md "${package_root}/README.md"
-          cp docs/DEPLOYMENT.md "${package_root}/DEPLOYMENT.md"
+          if [ -f "README.md" ]; then
+            cp README.md "${package_root}/README.md"
+          else
+            cat > "${package_root}/README.md" <<'README_FALLBACK'
+            BootCtrl EdgeOS Release Artifact
+            README.md was not available in this CI checkout.
+            README_FALLBACK
+          fi
+          if [ -f "docs/DEPLOYMENT.md" ]; then
+            cp docs/DEPLOYMENT.md "${package_root}/DEPLOYMENT.md"
+          else
+            cat > "${package_root}/DEPLOYMENT.md" <<'DEPLOYMENT_FALLBACK'
+            Deployment guide was not available in this CI checkout.
+            Run ./run-forte.sh to start the runtime.
+            DEPLOYMENT_FALLBACK
+          fi
           if [ -d "configurations/examples" ]; then
             cp -r configurations/examples "${package_root}/configurations/examples"
           fi
