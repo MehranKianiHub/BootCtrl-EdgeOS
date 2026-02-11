@@ -71,14 +71,16 @@ jobs:
           fi
 
           if [ -z "${include_dir}" ] || [ -z "${library_path}" ] || [ ! -f "${include_dir}/tensorflow/lite/interpreter.h" ] || [ ! -f "${library_path}" ]; then
-            rm -rf third_party/tensorflow third_party/tflite-build
-            git clone --depth=1 https://github.com/tensorflow/tensorflow.git third_party/tensorflow
+            rm -rf third_party/tensorflow third_party/tflite-build third_party/flatbuffers
+            git clone --depth=1 --branch v2.19.1 https://github.com/tensorflow/tensorflow.git third_party/tensorflow
+            git clone --depth=1 --branch v24.3.25 https://github.com/google/flatbuffers.git third_party/flatbuffers
             cmake -S third_party/tensorflow/tensorflow/lite \
               -B third_party/tflite-build \
               -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
               -DBUILD_SHARED_LIBS=ON \
-              -DTFLITE_ENABLE_XNNPACK=OFF
+              -DTFLITE_ENABLE_XNNPACK=OFF \
+              -DFETCHCONTENT_SOURCE_DIR_FLATBUFFERS="${GITHUB_WORKSPACE}/third_party/flatbuffers"
             cmake --build third_party/tflite-build --target tensorflow-lite -j"$(nproc)"
 
             include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
@@ -215,14 +217,16 @@ jobs:
           fi
 
           if [ -z "${include_dir}" ] || [ -z "${library_path}" ] || [ ! -f "${include_dir}/tensorflow/lite/interpreter.h" ] || [ ! -f "${library_path}" ]; then
-            rm -rf third_party/tensorflow third_party/tflite-build
-            git clone --depth=1 https://github.com/tensorflow/tensorflow.git third_party/tensorflow
+            rm -rf third_party/tensorflow third_party/tflite-build third_party/flatbuffers
+            git clone --depth=1 --branch v2.19.1 https://github.com/tensorflow/tensorflow.git third_party/tensorflow
+            git clone --depth=1 --branch v24.3.25 https://github.com/google/flatbuffers.git third_party/flatbuffers
             cmake -S third_party/tensorflow/tensorflow/lite \
               -B third_party/tflite-build \
               -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
               -DBUILD_SHARED_LIBS=ON \
-              -DTFLITE_ENABLE_XNNPACK=OFF
+              -DTFLITE_ENABLE_XNNPACK=OFF \
+              -DFETCHCONTENT_SOURCE_DIR_FLATBUFFERS="${GITHUB_WORKSPACE}/third_party/flatbuffers"
             cmake --build third_party/tflite-build --target tensorflow-lite -j"$(nproc)"
 
             include_dir="${GITHUB_WORKSPACE}/third_party/tensorflow"
