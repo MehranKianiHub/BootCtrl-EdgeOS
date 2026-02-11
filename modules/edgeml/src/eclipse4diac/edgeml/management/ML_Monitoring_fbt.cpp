@@ -10,6 +10,8 @@
 
 #include "forte/eclipse4diac/edgeml/management/ML_Monitoring_fbt.h"
 
+#include "forte/eclipse4diac/edgeml/core/monitoring_pipeline.h"
+
 #include <algorithm>
 #include <array>
 
@@ -17,12 +19,23 @@ using namespace forte::literals;
 
 namespace forte::eclipse4diac::edgeml {
   namespace {
-    const auto cDataInputNames =
-        std::array{"COMMAND"_STRID, "INFERENCE_US"_STRID, "HAS_ERROR"_STRID, "IN_ERROR_CODE"_STRID};
-    const auto cDataOutputNames =
-        std::array{"TOTAL_INFERENCES"_STRID, "TOTAL_ERRORS"_STRID, "AVG_INFERENCE_US"_STRID, "MAX_INFERENCE_US"_STRID,
-                   "LAST_ERROR_CODE"_STRID, "HEALTH_SCORE"_STRID, "SUCCESS"_STRID, "ERROR"_STRID,
-                   "ERROR_CODE"_STRID};
+    const auto cDataInputNames = std::array{"COMMAND"_STRID,
+                                             "INFERENCE_US"_STRID,
+                                             "HAS_ERROR"_STRID,
+                                             "IN_ERROR_CODE"_STRID,
+                                             "PERSIST_PATH"_STRID,
+                                             "APPEND"_STRID};
+    const auto cDataOutputNames = std::array{"TOTAL_INFERENCES"_STRID,
+                                              "TOTAL_ERRORS"_STRID,
+                                              "AVG_INFERENCE_US"_STRID,
+                                              "MAX_INFERENCE_US"_STRID,
+                                              "LAST_ERROR_CODE"_STRID,
+                                              "HEALTH_SCORE"_STRID,
+                                              "SUCCESS"_STRID,
+                                              "ERROR"_STRID,
+                                              "ERROR_CODE"_STRID,
+                                              "PERSISTED"_STRID,
+                                              "PERSIST_BYTES"_STRID};
     const auto cEventInputNames = std::array{"REQ"_STRID};
     const auto cEventInputTypeIds = std::array{"Event"_STRID};
     const auto cEventOutputNames = std::array{"CNF"_STRID};
@@ -39,6 +52,16 @@ namespace forte::eclipse4diac::edgeml {
         .mSocketNames = {},
         .mPlugNames = {},
     };
+
+    CIEC_USINT::TValueType mapPersistenceStatus(const EMonitoringPersistenceStatus paStatus) {
+      switch (paStatus) {
+        case EMonitoringPersistenceStatus::kInvalidPath: return FORTE_ML_Monitoring::scmErrorInvalidPath;
+        case EMonitoringPersistenceStatus::kIoError: return FORTE_ML_Monitoring::scmErrorPersistenceIo;
+        case EMonitoringPersistenceStatus::kParseError: return FORTE_ML_Monitoring::scmErrorPersistenceParse;
+        case EMonitoringPersistenceStatus::kOk:
+        default: return FORTE_ML_Monitoring::scmErrorOk;
+      }
+    }
   } // namespace
 
   DEFINE_FIRMWARE_FB(FORTE_ML_Monitoring, "eclipse4diac::edgeml::ML_Monitoring"_STRID)
@@ -50,6 +73,8 @@ namespace forte::eclipse4diac::edgeml {
       conn_INFERENCE_US(nullptr),
       conn_HAS_ERROR(nullptr),
       conn_IN_ERROR_CODE(nullptr),
+      conn_PERSIST_PATH(nullptr),
+      conn_APPEND(nullptr),
       conn_TOTAL_INFERENCES(*this, 0, var_TOTAL_INFERENCES),
       conn_TOTAL_ERRORS(*this, 1, var_TOTAL_ERRORS),
       conn_AVG_INFERENCE_US(*this, 2, var_AVG_INFERENCE_US),
@@ -59,6 +84,8 @@ namespace forte::eclipse4diac::edgeml {
       conn_SUCCESS(*this, 6, var_SUCCESS),
       conn_ERROR(*this, 7, var_ERROR),
       conn_ERROR_CODE(*this, 8, var_ERROR_CODE),
+      conn_PERSISTED(*this, 9, var_PERSISTED),
+      conn_PERSIST_BYTES(*this, 10, var_PERSIST_BYTES),
       mTotalInferenceTimeUs(0U),
       mTotalInferences(0U),
       mTotalErrors(0U),
@@ -72,6 +99,8 @@ namespace forte::eclipse4diac::edgeml {
     var_INFERENCE_US = CIEC_UDINT(0U);
     var_HAS_ERROR = CIEC_BOOL(false);
     var_IN_ERROR_CODE = CIEC_USINT(0U);
+    var_PERSIST_PATH = CIEC_STRING(std::string(""));
+    var_APPEND = CIEC_BOOL(true);
 
     var_TOTAL_INFERENCES = CIEC_UDINT(0U);
     var_TOTAL_ERRORS = CIEC_UDINT(0U);
@@ -82,6 +111,7 @@ namespace forte::eclipse4diac::edgeml {
     var_SUCCESS = CIEC_BOOL(true);
     var_ERROR = CIEC_BOOL(false);
     var_ERROR_CODE = CIEC_USINT(scmErrorOk);
+    clearPersistenceOutputs();
 
     clearMetrics();
   }
@@ -92,6 +122,11 @@ namespace forte::eclipse4diac::edgeml {
     mTotalErrors = 0U;
     mMaxInferenceUs = 0U;
     mLastErrorCode = 0U;
+  }
+
+  void FORTE_ML_Monitoring::clearPersistenceOutputs() {
+    var_PERSISTED = CIEC_BOOL(false);
+    var_PERSIST_BYTES = CIEC_UDINT(0U);
   }
 
   void FORTE_ML_Monitoring::publishMetrics() {
@@ -131,6 +166,8 @@ namespace forte::eclipse4diac::edgeml {
       return;
     }
 
+    clearPersistenceOutputs();
+
     const auto command = static_cast<CIEC_USINT::TValueType>(var_COMMAND);
     switch (command) {
       case scmCommandReport: {
@@ -162,6 +199,56 @@ namespace forte::eclipse4diac::edgeml {
         break;
       }
 
+      case scmCommandExport: {
+        if (var_PERSIST_PATH.empty()) {
+          setError(scmErrorInvalidPath);
+          break;
+        }
+
+        const MonitoringPersistentMetrics metrics{mTotalInferenceTimeUs,
+                                                  static_cast<std::uint32_t>(mTotalInferences),
+                                                  static_cast<std::uint32_t>(mTotalErrors),
+                                                  static_cast<std::uint32_t>(mMaxInferenceUs),
+                                                  static_cast<std::uint8_t>(mLastErrorCode)};
+
+        std::size_t writtenBytes = 0U;
+        const auto status = MonitoringPipeline::exportCsv(metrics, var_PERSIST_PATH.getStorage(),
+                                                          static_cast<CIEC_BOOL::TValueType>(var_APPEND), writtenBytes);
+        if (EMonitoringPersistenceStatus::kOk != status) {
+          setError(mapPersistenceStatus(status));
+          break;
+        }
+
+        var_PERSISTED = CIEC_BOOL(true);
+        var_PERSIST_BYTES = CIEC_UDINT(static_cast<CIEC_UDINT::TValueType>(writtenBytes));
+        clearError();
+        break;
+      }
+
+      case scmCommandImport: {
+        if (var_PERSIST_PATH.empty()) {
+          setError(scmErrorInvalidPath);
+          break;
+        }
+
+        MonitoringPersistentMetrics metrics{};
+        const auto status = MonitoringPipeline::importLatestCsv(var_PERSIST_PATH.getStorage(), metrics);
+        if (EMonitoringPersistenceStatus::kOk != status) {
+          setError(mapPersistenceStatus(status));
+          break;
+        }
+
+        mTotalInferenceTimeUs = metrics.totalInferenceTimeUs;
+        mTotalInferences = static_cast<CIEC_UDINT::TValueType>(metrics.totalInferences);
+        mTotalErrors = static_cast<CIEC_UDINT::TValueType>(metrics.totalErrors);
+        mMaxInferenceUs = static_cast<CIEC_UDINT::TValueType>(metrics.maxInferenceUs);
+        mLastErrorCode = static_cast<CIEC_USINT::TValueType>(metrics.lastErrorCode);
+
+        var_PERSISTED = CIEC_BOOL(true);
+        clearError();
+        break;
+      }
+
       default: {
         setError(scmErrorInvalidCommand);
         break;
@@ -179,6 +266,8 @@ namespace forte::eclipse4diac::edgeml {
         readData(1, var_INFERENCE_US, conn_INFERENCE_US);
         readData(2, var_HAS_ERROR, conn_HAS_ERROR);
         readData(3, var_IN_ERROR_CODE, conn_IN_ERROR_CODE);
+        readData(4, var_PERSIST_PATH, conn_PERSIST_PATH);
+        readData(5, var_APPEND, conn_APPEND);
         break;
       }
       default: break;
@@ -197,6 +286,8 @@ namespace forte::eclipse4diac::edgeml {
         writeData(cFBInterfaceSpec.getNumDIs() + 6, var_SUCCESS, conn_SUCCESS);
         writeData(cFBInterfaceSpec.getNumDIs() + 7, var_ERROR, conn_ERROR);
         writeData(cFBInterfaceSpec.getNumDIs() + 8, var_ERROR_CODE, conn_ERROR_CODE);
+        writeData(cFBInterfaceSpec.getNumDIs() + 9, var_PERSISTED, conn_PERSISTED);
+        writeData(cFBInterfaceSpec.getNumDIs() + 10, var_PERSIST_BYTES, conn_PERSIST_BYTES);
         break;
       }
       default: break;
@@ -209,6 +300,8 @@ namespace forte::eclipse4diac::edgeml {
       case 1: return &var_INFERENCE_US;
       case 2: return &var_HAS_ERROR;
       case 3: return &var_IN_ERROR_CODE;
+      case 4: return &var_PERSIST_PATH;
+      case 5: return &var_APPEND;
     }
     return nullptr;
   }
@@ -224,6 +317,8 @@ namespace forte::eclipse4diac::edgeml {
       case 6: return &var_SUCCESS;
       case 7: return &var_ERROR;
       case 8: return &var_ERROR_CODE;
+      case 9: return &var_PERSISTED;
+      case 10: return &var_PERSIST_BYTES;
     }
     return nullptr;
   }
@@ -241,6 +336,8 @@ namespace forte::eclipse4diac::edgeml {
       case 1: return &conn_INFERENCE_US;
       case 2: return &conn_HAS_ERROR;
       case 3: return &conn_IN_ERROR_CODE;
+      case 4: return &conn_PERSIST_PATH;
+      case 5: return &conn_APPEND;
     }
     return nullptr;
   }
@@ -256,6 +353,8 @@ namespace forte::eclipse4diac::edgeml {
       case 6: return &conn_SUCCESS;
       case 7: return &conn_ERROR;
       case 8: return &conn_ERROR_CODE;
+      case 9: return &conn_PERSISTED;
+      case 10: return &conn_PERSIST_BYTES;
     }
     return nullptr;
   }

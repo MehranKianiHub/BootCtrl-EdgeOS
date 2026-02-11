@@ -12,6 +12,7 @@
 
 #include "forte/datatypes/forte_bool.h"
 #include "forte/datatypes/forte_real.h"
+#include "forte/datatypes/forte_string.h"
 #include "forte/datatypes/forte_udint.h"
 #include "forte/datatypes/forte_usint.h"
 #include "forte/funcbloc.h"
@@ -28,9 +29,14 @@ namespace forte::eclipse4diac::edgeml {
       static constexpr CIEC_USINT::TValueType scmCommandReport = 0;
       static constexpr CIEC_USINT::TValueType scmCommandSnapshot = 1;
       static constexpr CIEC_USINT::TValueType scmCommandReset = 2;
+      static constexpr CIEC_USINT::TValueType scmCommandExport = 3;
+      static constexpr CIEC_USINT::TValueType scmCommandImport = 4;
 
       static constexpr CIEC_USINT::TValueType scmErrorOk = 0;
       static constexpr CIEC_USINT::TValueType scmErrorInvalidCommand = 1;
+      static constexpr CIEC_USINT::TValueType scmErrorInvalidPath = 2;
+      static constexpr CIEC_USINT::TValueType scmErrorPersistenceIo = 3;
+      static constexpr CIEC_USINT::TValueType scmErrorPersistenceParse = 4;
 
     private:
       static const TEventID scmEventREQID = 0;
@@ -45,6 +51,7 @@ namespace forte::eclipse4diac::edgeml {
       void clearError();
       void clearMetrics();
       void publishMetrics();
+      void clearPersistenceOutputs();
 
     public:
       FORTE_ML_Monitoring(StringId paInstanceNameId, CFBContainer &paContainer);
@@ -53,6 +60,8 @@ namespace forte::eclipse4diac::edgeml {
       CIEC_UDINT var_INFERENCE_US;
       CIEC_BOOL var_HAS_ERROR;
       CIEC_USINT var_IN_ERROR_CODE;
+      CIEC_STRING var_PERSIST_PATH;
+      CIEC_BOOL var_APPEND;
 
       CIEC_UDINT var_TOTAL_INFERENCES;
       CIEC_UDINT var_TOTAL_ERRORS;
@@ -63,6 +72,8 @@ namespace forte::eclipse4diac::edgeml {
       CIEC_BOOL var_SUCCESS;
       CIEC_BOOL var_ERROR;
       CIEC_USINT var_ERROR_CODE;
+      CIEC_BOOL var_PERSISTED;
+      CIEC_UDINT var_PERSIST_BYTES;
 
       CEventConnection conn_CNF;
 
@@ -70,6 +81,8 @@ namespace forte::eclipse4diac::edgeml {
       CDataConnection *conn_INFERENCE_US;
       CDataConnection *conn_HAS_ERROR;
       CDataConnection *conn_IN_ERROR_CODE;
+      CDataConnection *conn_PERSIST_PATH;
+      CDataConnection *conn_APPEND;
 
       COutDataConnection<CIEC_UDINT> conn_TOTAL_INFERENCES;
       COutDataConnection<CIEC_UDINT> conn_TOTAL_ERRORS;
@@ -80,6 +93,8 @@ namespace forte::eclipse4diac::edgeml {
       COutDataConnection<CIEC_BOOL> conn_SUCCESS;
       COutDataConnection<CIEC_BOOL> conn_ERROR;
       COutDataConnection<CIEC_USINT> conn_ERROR_CODE;
+      COutDataConnection<CIEC_BOOL> conn_PERSISTED;
+      COutDataConnection<CIEC_UDINT> conn_PERSIST_BYTES;
 
       CIEC_ANY *getDI(size_t paIndex) override;
       CIEC_ANY *getDO(size_t paIndex) override;

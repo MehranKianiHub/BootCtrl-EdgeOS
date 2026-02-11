@@ -6,5 +6,6 @@
 
 target_sources(forte-edgeml PRIVATE
         model_registry.cpp
+        monitoring_pipeline.cpp
         runtime_context.cpp
 )
