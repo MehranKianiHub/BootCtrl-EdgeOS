@@ -11,5 +11,7 @@ target_sources(forte-edgeml PUBLIC
         model_metadata.h
         model_registry.h
         monitoring_pipeline.h
+        ota_persistence.h
+        ota_security.h
         runtime_context.h
 )

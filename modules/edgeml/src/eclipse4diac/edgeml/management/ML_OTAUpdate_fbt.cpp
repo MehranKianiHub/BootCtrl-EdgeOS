@@ -11,6 +11,8 @@
 #include "forte/eclipse4diac/edgeml/management/ML_OTAUpdate_fbt.h"
 
 #include "forte/eclipse4diac/edgeml/core/model_metadata.h"
+#include "forte/eclipse4diac/edgeml/core/ota_persistence.h"
+#include "forte/eclipse4diac/edgeml/core/ota_security.h"
 #include "forte/eclipse4diac/edgeml/core/runtime_context.h"
 
 #include <algorithm>
@@ -23,8 +25,17 @@ using namespace forte::literals;
 
 namespace forte::eclipse4diac::edgeml {
   namespace {
-    const auto cDataInputNames = std::array{"COMMAND"_STRID, "MODEL_ID"_STRID, "VERSION"_STRID,
-                                             "EXPECTED_SIZE"_STRID, "CHUNK"_STRID};
+    constexpr auto cDefaultStatePath = "./edgeml_ota_state.dat";
+
+    const auto cDataInputNames = std::array{"COMMAND"_STRID,
+                                             "MODEL_ID"_STRID,
+                                             "VERSION"_STRID,
+                                             "EXPECTED_SIZE"_STRID,
+                                             "EXPECTED_SHA256"_STRID,
+                                             "SIGNATURE"_STRID,
+                                             "TRUST_ANCHOR"_STRID,
+                                             "STATE_PATH"_STRID,
+                                             "CHUNK"_STRID};
     const auto cDataOutputNames = std::array{"STATE"_STRID,
                                               "PROGRESS"_STRID,
                                               "ACTIVE_MODEL_ID"_STRID,
@@ -93,6 +104,10 @@ namespace forte::eclipse4diac::edgeml {
       conn_MODEL_ID(nullptr),
       conn_VERSION(nullptr),
       conn_EXPECTED_SIZE(nullptr),
+      conn_EXPECTED_SHA256(nullptr),
+      conn_SIGNATURE(nullptr),
+      conn_TRUST_ANCHOR(nullptr),
+      conn_STATE_PATH(nullptr),
       conn_CHUNK(nullptr),
       conn_STATE(*this, 0, var_STATE),
       conn_PROGRESS(*this, 1, var_PROGRESS),
@@ -113,6 +128,10 @@ namespace forte::eclipse4diac::edgeml {
     var_MODEL_ID = CIEC_STRING(std::string(""));
     var_VERSION = CIEC_STRING(std::string(""));
     var_EXPECTED_SIZE = CIEC_UDINT(0U);
+    var_EXPECTED_SHA256 = CIEC_STRING(std::string(""));
+    var_SIGNATURE = CIEC_STRING(std::string(""));
+    var_TRUST_ANCHOR = CIEC_STRING(std::string(""));
+    var_STATE_PATH = CIEC_STRING(std::string(cDefaultStatePath));
     var_CHUNK.setValue(makeEmptyByteArray());
 
     var_STATE = CIEC_USINT(scmStateIdle);
@@ -127,11 +146,17 @@ namespace forte::eclipse4diac::edgeml {
 
     mStagedModelId.clear();
     mStagedVersion.clear();
+    mStagedExpectedSha256.clear();
+    mStagedSignature.clear();
+    mStagedTrustAnchor.clear();
     mStagedBlob.clear();
     mActiveModelId = "mock.default";
     mPreviousActiveModelId.clear();
+    mStatePath = cDefaultStatePath;
     mExpectedSize = 0U;
     mRollbackAvailable = false;
+
+    [[maybe_unused]] const auto recovered = recoverState();
   }
 
   void FORTE_ML_OTAUpdate::setError(const CIEC_USINT::TValueType paErrorCode) {
@@ -153,6 +178,9 @@ namespace forte::eclipse4diac::edgeml {
   void FORTE_ML_OTAUpdate::clearStaging() {
     mStagedModelId.clear();
     mStagedVersion.clear();
+    mStagedExpectedSha256.clear();
+    mStagedSignature.clear();
+    mStagedTrustAnchor.clear();
     mStagedBlob.clear();
     mExpectedSize = 0U;
 
@@ -173,12 +201,94 @@ namespace forte::eclipse4diac::edgeml {
     var_PROGRESS = CIEC_USINT(bounded);
   }
 
+  bool FORTE_ML_OTAUpdate::persistState() {
+    OtaPersistentState persistedState{
+        .activeModelId = mActiveModelId,
+        .previousActiveModelId = mPreviousActiveModelId,
+        .stagedModelId = mStagedModelId,
+        .stagedVersion = mStagedVersion,
+        .rollbackAvailable = mRollbackAvailable,
+        .state = static_cast<std::uint8_t>(var_STATE),
+        .expectedSize = static_cast<std::uint32_t>(mExpectedSize),
+        .stagedSize = static_cast<std::uint32_t>(mStagedBlob.size()),
+    };
+    return EOtaPersistenceStatus::kOk == OtaPersistence::save(persistedState, mStatePath);
+  }
+
+  void FORTE_ML_OTAUpdate::applyRecoveredState() {
+    var_ACTIVE_MODEL_ID = CIEC_STRING(mActiveModelId);
+    var_STAGED_MODEL_ID = CIEC_STRING(mStagedModelId);
+    var_STAGED_SIZE = CIEC_UDINT(static_cast<CIEC_UDINT::TValueType>(mStagedBlob.size()));
+    var_ROLLBACK_AVAILABLE = CIEC_BOOL(mRollbackAvailable);
+
+    const auto state = static_cast<CIEC_USINT::TValueType>(var_STATE);
+    if (scmStateCommitted == state) {
+      var_PROGRESS = CIEC_USINT(100U);
+    } else if (scmStateStaging == state) {
+      updateProgress();
+    } else {
+      var_PROGRESS = CIEC_USINT(0U);
+    }
+  }
+
+  bool FORTE_ML_OTAUpdate::recoverState() {
+    OtaPersistentState recoveredState{};
+    const auto status = OtaPersistence::load(mStatePath, recoveredState);
+    if (EOtaPersistenceStatus::kNotFound == status) {
+      applyRecoveredState();
+      return true;
+    }
+    if (EOtaPersistenceStatus::kOk != status) {
+      return false;
+    }
+
+    mActiveModelId = recoveredState.activeModelId.empty() ? "mock.default" : recoveredState.activeModelId;
+    mPreviousActiveModelId = recoveredState.previousActiveModelId;
+    mStagedModelId = recoveredState.stagedModelId;
+    mStagedVersion = recoveredState.stagedVersion;
+    mStagedExpectedSha256.clear();
+    mStagedSignature.clear();
+    mStagedTrustAnchor.clear();
+    mExpectedSize = static_cast<CIEC_UDINT::TValueType>(recoveredState.expectedSize);
+    mStagedBlob.clear();
+    mRollbackAvailable = recoveredState.rollbackAvailable;
+
+    const auto recoveredStateValue = static_cast<CIEC_USINT::TValueType>(recoveredState.state);
+    if (recoveredStateValue <= scmStateRolledBack) {
+      setState(recoveredStateValue);
+    } else {
+      setState(scmStateIdle);
+    }
+
+    auto &runtime = EdgeMLRuntime::instance();
+    if (!runtime.hasModel(mActiveModelId)) {
+      mActiveModelId = "mock.default";
+      mPreviousActiveModelId.clear();
+      mRollbackAvailable = false;
+      setState(scmStateIdle);
+    } else if (mRollbackAvailable && (mPreviousActiveModelId.empty() || !runtime.hasModel(mPreviousActiveModelId))) {
+      mRollbackAvailable = false;
+    }
+
+    if (scmStateStaging == static_cast<CIEC_USINT::TValueType>(var_STATE)) {
+      clearStaging();
+      setState(scmStateIdle);
+    }
+
+    applyRecoveredState();
+    [[maybe_unused]] const auto persisted = persistState();
+    return true;
+  }
+
   void FORTE_ML_OTAUpdate::executeEvent(const TEventID paEIID, CEventChainExecutionThread *const paECET) {
     if (scmEventREQID != paEIID) {
       return;
     }
 
     clearError();
+    if (!var_STATE_PATH.empty()) {
+      mStatePath = var_STATE_PATH.getStorage();
+    }
     var_ROLLBACK_AVAILABLE = CIEC_BOOL(mRollbackAvailable);
 
     auto &runtime = EdgeMLRuntime::instance();
@@ -203,6 +313,9 @@ namespace forte::eclipse4diac::edgeml {
 
         mStagedModelId = modelId;
         mStagedVersion = var_VERSION.getStorage();
+        mStagedExpectedSha256 = var_EXPECTED_SHA256.getStorage();
+        mStagedSignature = var_SIGNATURE.getStorage();
+        mStagedTrustAnchor = var_TRUST_ANCHOR.getStorage();
         mStagedBlob.clear();
         mExpectedSize = static_cast<CIEC_UDINT::TValueType>(var_EXPECTED_SIZE);
 
@@ -210,6 +323,9 @@ namespace forte::eclipse4diac::edgeml {
         var_STAGED_SIZE = CIEC_UDINT(0U);
         var_PROGRESS = CIEC_USINT(0U);
         setState(scmStateStaging);
+        if (!persistState()) {
+          setError(scmErrorPersistenceFailed);
+        }
         break;
       }
 
@@ -223,8 +339,17 @@ namespace forte::eclipse4diac::edgeml {
           setError(scmErrorInvalidPayload);
           break;
         }
+
+        if (0U != mExpectedSize && mStagedBlob.size() > mExpectedSize) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
+
         var_STAGED_SIZE = CIEC_UDINT(static_cast<CIEC_UDINT::TValueType>(mStagedBlob.size()));
         updateProgress();
+        if (!persistState()) {
+          setError(scmErrorPersistenceFailed);
+        }
         break;
       }
 
@@ -242,16 +367,48 @@ namespace forte::eclipse4diac::edgeml {
         auto modelBinary = mStagedBlob;
         if (modelBinary.empty()) {
           if (EdgeMLRuntime::isMockModelId(mStagedModelId)) {
-            modelBinary.emplace_back(0x00);
+            modelBinary.emplace_back(0x00U);
           } else {
             setError(scmErrorInvalidPayload);
             break;
           }
         }
 
+        if (0U != mExpectedSize && modelBinary.size() != mExpectedSize) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
+
+        const auto expectedDigest = OtaSecurity::normalizeHexDigest(mStagedExpectedSha256);
+        if (expectedDigest.empty()) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
+
+        const auto payloadDigest = OtaSecurity::computeSha256Hex(modelBinary);
+        if (!OtaSecurity::constantTimeEqual(payloadDigest, expectedDigest)) {
+          setError(scmErrorHashMismatch);
+          break;
+        }
+
+        if (mStagedSignature.empty() || mStagedTrustAnchor.empty()) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
+
+        const auto normalizedSignature = OtaSecurity::normalizeHexDigest(mStagedSignature);
+        const auto expectedSignature = OtaSecurity::deriveSignature(payloadDigest, mStagedTrustAnchor);
+        if (normalizedSignature.empty() || expectedSignature.empty()) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
+        if (!OtaSecurity::constantTimeEqual(normalizedSignature, expectedSignature)) {
+          setError(scmErrorSignatureMismatch);
+          break;
+        }
+
         const auto metadataSize = 0U == mExpectedSize ? modelBinary.size() : static_cast<std::size_t>(mExpectedSize);
-        const ModelMetadata metadata{
-            mStagedModelId, mStagedVersion, metadataSize, "sha256:ota:" + std::to_string(metadataSize)};
+        const ModelMetadata metadata{mStagedModelId, mStagedVersion, metadataSize, "sha256:" + payloadDigest};
         const auto status = runtime.loadModel(metadata, modelBinary);
         if (EEdgeMLError::kOk != status && EEdgeMLError::kModelAlreadyExists != status) {
           setError(mapApplyError(status));
@@ -267,6 +424,9 @@ namespace forte::eclipse4diac::edgeml {
         var_STAGED_SIZE = CIEC_UDINT(static_cast<CIEC_UDINT::TValueType>(mStagedBlob.size()));
         var_PROGRESS = CIEC_USINT(100U);
         setState(scmStateCommitted);
+        if (!persistState()) {
+          setError(scmErrorPersistenceFailed);
+        }
         break;
       }
 
@@ -278,6 +438,9 @@ namespace forte::eclipse4diac::edgeml {
 
         clearStaging();
         setState(scmStateIdle);
+        if (!persistState()) {
+          setError(scmErrorPersistenceFailed);
+        }
         break;
       }
 
@@ -294,6 +457,16 @@ namespace forte::eclipse4diac::edgeml {
         var_ROLLBACK_AVAILABLE = CIEC_BOOL(false);
         clearStaging();
         setState(scmStateRolledBack);
+        if (!persistState()) {
+          setError(scmErrorPersistenceFailed);
+        }
+        break;
+      }
+
+      case scmCommandRecover: {
+        if (!recoverState()) {
+          setError(scmErrorRecoveryFailed);
+        }
         break;
       }
 
@@ -313,7 +486,11 @@ namespace forte::eclipse4diac::edgeml {
         readData(1, var_MODEL_ID, conn_MODEL_ID);
         readData(2, var_VERSION, conn_VERSION);
         readData(3, var_EXPECTED_SIZE, conn_EXPECTED_SIZE);
-        readData(4, var_CHUNK, conn_CHUNK);
+        readData(4, var_EXPECTED_SHA256, conn_EXPECTED_SHA256);
+        readData(5, var_SIGNATURE, conn_SIGNATURE);
+        readData(6, var_TRUST_ANCHOR, conn_TRUST_ANCHOR);
+        readData(7, var_STATE_PATH, conn_STATE_PATH);
+        readData(8, var_CHUNK, conn_CHUNK);
         break;
       }
       default: break;
@@ -344,7 +521,11 @@ namespace forte::eclipse4diac::edgeml {
       case 1: return &var_MODEL_ID;
       case 2: return &var_VERSION;
       case 3: return &var_EXPECTED_SIZE;
-      case 4: return &var_CHUNK;
+      case 4: return &var_EXPECTED_SHA256;
+      case 5: return &var_SIGNATURE;
+      case 6: return &var_TRUST_ANCHOR;
+      case 7: return &var_STATE_PATH;
+      case 8: return &var_CHUNK;
     }
     return nullptr;
   }
@@ -377,7 +558,11 @@ namespace forte::eclipse4diac::edgeml {
       case 1: return &conn_MODEL_ID;
       case 2: return &conn_VERSION;
       case 3: return &conn_EXPECTED_SIZE;
-      case 4: return &conn_CHUNK;
+      case 4: return &conn_EXPECTED_SHA256;
+      case 5: return &conn_SIGNATURE;
+      case 6: return &conn_TRUST_ANCHOR;
+      case 7: return &conn_STATE_PATH;
+      case 8: return &conn_CHUNK;
     }
     return nullptr;
   }

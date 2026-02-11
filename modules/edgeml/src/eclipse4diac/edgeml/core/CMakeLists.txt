@@ -7,5 +7,7 @@
 target_sources(forte-edgeml PRIVATE
         model_registry.cpp
         monitoring_pipeline.cpp
+        ota_persistence.cpp
+        ota_security.cpp
         runtime_context.cpp
 )

@@ -38,6 +38,7 @@ namespace forte::eclipse4diac::edgeml {
       static constexpr CIEC_USINT::TValueType scmCommandCommit = 2;
       static constexpr CIEC_USINT::TValueType scmCommandAbort = 3;
       static constexpr CIEC_USINT::TValueType scmCommandRollback = 4;
+      static constexpr CIEC_USINT::TValueType scmCommandRecover = 5;
 
       static constexpr CIEC_USINT::TValueType scmStateIdle = 0;
       static constexpr CIEC_USINT::TValueType scmStateStaging = 1;
@@ -52,6 +53,10 @@ namespace forte::eclipse4diac::edgeml {
       static constexpr CIEC_USINT::TValueType scmErrorBackendUnavailable = 5;
       static constexpr CIEC_USINT::TValueType scmErrorApplyFailed = 6;
       static constexpr CIEC_USINT::TValueType scmErrorRollbackUnavailable = 7;
+      static constexpr CIEC_USINT::TValueType scmErrorHashMismatch = 8;
+      static constexpr CIEC_USINT::TValueType scmErrorSignatureMismatch = 9;
+      static constexpr CIEC_USINT::TValueType scmErrorPersistenceFailed = 10;
+      static constexpr CIEC_USINT::TValueType scmErrorRecoveryFailed = 11;
 
     private:
       static const TEventID scmEventREQID = 0;
@@ -67,6 +72,9 @@ namespace forte::eclipse4diac::edgeml {
       void clearStaging();
       void setState(CIEC_USINT::TValueType paState);
       void updateProgress();
+      bool persistState();
+      bool recoverState();
+      void applyRecoveredState();
 
     public:
       FORTE_ML_OTAUpdate(StringId paInstanceNameId, CFBContainer &paContainer);
@@ -75,6 +83,10 @@ namespace forte::eclipse4diac::edgeml {
       CIEC_STRING var_MODEL_ID;
       CIEC_STRING var_VERSION;
       CIEC_UDINT var_EXPECTED_SIZE;
+      CIEC_STRING var_EXPECTED_SHA256;
+      CIEC_STRING var_SIGNATURE;
+      CIEC_STRING var_TRUST_ANCHOR;
+      CIEC_STRING var_STATE_PATH;
       CIEC_ANY_VARIANT var_CHUNK;
 
       CIEC_USINT var_STATE;
@@ -93,6 +105,10 @@ namespace forte::eclipse4diac::edgeml {
       CDataConnection *conn_MODEL_ID;
       CDataConnection *conn_VERSION;
       CDataConnection *conn_EXPECTED_SIZE;
+      CDataConnection *conn_EXPECTED_SHA256;
+      CDataConnection *conn_SIGNATURE;
+      CDataConnection *conn_TRUST_ANCHOR;
+      CDataConnection *conn_STATE_PATH;
       CDataConnection *conn_CHUNK;
 
       COutDataConnection<CIEC_USINT> conn_STATE;
@@ -114,9 +130,13 @@ namespace forte::eclipse4diac::edgeml {
     private:
       std::string mStagedModelId;
       std::string mStagedVersion;
+      std::string mStagedExpectedSha256;
+      std::string mStagedSignature;
+      std::string mStagedTrustAnchor;
       std::vector<std::uint8_t> mStagedBlob;
       std::string mActiveModelId;
       std::string mPreviousActiveModelId;
+      std::string mStatePath;
       CIEC_UDINT::TValueType mExpectedSize;
       bool mRollbackAvailable;
   };
