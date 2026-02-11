@@ -73,8 +73,14 @@ if (FORTE_EDGEML_BACKEND_TFLITE)
 
     if (_edgeml_tflite_include AND _edgeml_tflite_library)
         set(FORTE_EDGEML_BACKEND_TFLITE_ACTIVE ON CACHE INTERNAL "Whether TFLite backend is active for this build" FORCE)
-        target_include_directories(forte-edgeml PUBLIC "${_edgeml_tflite_include}")
-        target_link_libraries(forte-edgeml PUBLIC "${_edgeml_tflite_library}")
+        # Keep fallback, CI-provisioned TFLite paths build-only so export/install does not
+        # capture source-tree paths (e.g. third_party/tensorflow under workspace checkout).
+        target_include_directories(forte-edgeml
+                                   PUBLIC
+                                   $<BUILD_INTERFACE:${_edgeml_tflite_include}>)
+        target_link_libraries(forte-edgeml
+                              PUBLIC
+                              $<BUILD_INTERFACE:${_edgeml_tflite_library}>)
         target_compile_definitions(forte-edgeml PUBLIC FORTE_EDGEML_BACKEND_TFLITE=1)
         message(STATUS "EdgeML: TFLite backend enabled")
     else ()
