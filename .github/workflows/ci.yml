@@ -404,10 +404,17 @@ jobs:
           mkdir -p "${package_root}/bin" "${package_root}/lib" "${package_root}/configurations" "${artifact_dir}"
 
           cp "${BUILD_DIR}/4diacFORTE/forte" "${package_root}/bin/forte"
-          cp -r configurations/examples "${package_root}/configurations/examples"
-          cp -r configurations/templates "${package_root}/configurations/templates"
           cp README.md "${package_root}/README.md"
           cp docs/DEPLOYMENT.md "${package_root}/DEPLOYMENT.md"
+          if [ -d "configurations/examples" ]; then
+            cp -r configurations/examples "${package_root}/configurations/examples"
+          fi
+          if [ -d "configurations/templates" ]; then
+            cp -r configurations/templates "${package_root}/configurations/templates"
+          fi
+          if [ -f "configurations/README.md" ]; then
+            cp configurations/README.md "${package_root}/configurations/README.md"
+          fi
 
           if [[ "${tflite_lib}" == *.so* ]]; then
             tflite_lib_real="$(readlink -f "${tflite_lib}")"
