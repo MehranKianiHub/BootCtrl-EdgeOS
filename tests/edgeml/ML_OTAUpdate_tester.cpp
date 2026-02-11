@@ -10,6 +10,12 @@
 
 #include "../../4diacFORTE/tests/core/fbtests/fbtestfixture.h"
 #include "../../4diacFORTE/tests/forte_boost_output_support.h"
+#include "forte/datatypes/forte_any_variant.h"
+#include "forte/datatypes/forte_array.h"
+#include "forte/datatypes/forte_array_common.h"
+#include "forte/datatypes/forte_array_fixed.h"
+#include "forte/datatypes/forte_array_variable.h"
+#include "forte/datatypes/forte_byte.h"
 #include "forte/datatypes/forte_bool.h"
 #include "forte/datatypes/forte_string.h"
 #include "forte/datatypes/forte_udint.h"
@@ -20,6 +26,20 @@
 using namespace forte::literals;
 
 namespace forte::eclipse4diac::edgeml::test {
+  namespace {
+    void setChunkFromString(CIEC_ANY_VARIANT &paTarget, const std::string &paValue) {
+      CIEC_ARRAY_VARIABLE<CIEC_BYTE> chunk;
+      if (paValue.empty()) {
+        chunk.setBounds(0, -1);
+      } else {
+        chunk.setBounds(0, static_cast<intmax_t>(paValue.size()) - 1);
+        for (std::size_t i = 0; i < paValue.size(); ++i) {
+          chunk[static_cast<intmax_t>(i)] = CIEC_BYTE(static_cast<CIEC_BYTE::TValueType>(paValue[i]));
+        }
+      }
+      paTarget.setValue(chunk);
+    }
+  } // namespace
 
   struct ML_OTAUpdate_TestFixture : public forte::test::CFBTestFixtureBase {
 
@@ -34,7 +54,7 @@ namespace forte::eclipse4diac::edgeml::test {
       CIEC_STRING mModelId;
       CIEC_STRING mVersion;
       CIEC_UDINT mExpectedSize;
-      CIEC_STRING mChunk;
+      CIEC_ANY_VARIANT mChunk;
 
       CIEC_USINT mState;
       CIEC_USINT mProgress;
@@ -56,7 +76,7 @@ namespace forte::eclipse4diac::edgeml::test {
     mModelId = CIEC_STRING(modelId);
     mVersion = CIEC_STRING(std::string("1.0.0"));
     mExpectedSize = CIEC_UDINT(3U);
-    mChunk = CIEC_STRING(std::string(""));
+    setChunkFromString(mChunk, "");
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
@@ -66,7 +86,7 @@ namespace forte::eclipse4diac::edgeml::test {
     BOOST_TEST(static_cast<CIEC_BOOL::TValueType>(mSuccess));
 
     mCommand = CIEC_USINT(1U);
-    mChunk = CIEC_STRING(std::string("abc"));
+    setChunkFromString(mChunk, "abc");
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
@@ -95,12 +115,12 @@ namespace forte::eclipse4diac::edgeml::test {
     mModelId = CIEC_STRING(modelA);
     mVersion = CIEC_STRING(std::string("1.0.0"));
     mExpectedSize = CIEC_UDINT(1U);
-    mChunk = CIEC_STRING(std::string(""));
+    setChunkFromString(mChunk, "");
     triggerEvent(0);
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
 
     mCommand = CIEC_USINT(1U);
-    mChunk = CIEC_STRING(std::string("a"));
+    setChunkFromString(mChunk, "a");
     triggerEvent(0);
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
     mCommand = CIEC_USINT(2U);
@@ -113,11 +133,11 @@ namespace forte::eclipse4diac::edgeml::test {
     mModelId = CIEC_STRING(modelB);
     mVersion = CIEC_STRING(std::string("2.0.0"));
     mExpectedSize = CIEC_UDINT(1U);
-    mChunk = CIEC_STRING(std::string(""));
+    setChunkFromString(mChunk, "");
     triggerEvent(0);
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
     mCommand = CIEC_USINT(1U);
-    mChunk = CIEC_STRING(std::string("b"));
+    setChunkFromString(mChunk, "b");
     triggerEvent(0);
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
     mCommand = CIEC_USINT(2U);
@@ -143,7 +163,7 @@ namespace forte::eclipse4diac::edgeml::test {
     mModelId = CIEC_STRING(std::string("mock.ota.invalid"));
     mVersion = CIEC_STRING(std::string("1.0.0"));
     mExpectedSize = CIEC_UDINT(1U);
-    mChunk = CIEC_STRING(std::string("x"));
+    setChunkFromString(mChunk, "x");
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
@@ -157,7 +177,7 @@ namespace forte::eclipse4diac::edgeml::test {
     mModelId = CIEC_STRING(std::string(""));
     mVersion = CIEC_STRING(std::string("1.0.0"));
     mExpectedSize = CIEC_UDINT(10U);
-    mChunk = CIEC_STRING(std::string(""));
+    setChunkFromString(mChunk, "");
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
@@ -171,12 +191,12 @@ namespace forte::eclipse4diac::edgeml::test {
     mModelId = CIEC_STRING(std::string("mock.ota.abort"));
     mVersion = CIEC_STRING(std::string("1.0.0"));
     mExpectedSize = CIEC_UDINT(4U);
-    mChunk = CIEC_STRING(std::string(""));
+    setChunkFromString(mChunk, "");
     triggerEvent(0);
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
 
     mCommand = CIEC_USINT(1U);
-    mChunk = CIEC_STRING(std::string("ab"));
+    setChunkFromString(mChunk, "ab");
     triggerEvent(0);
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
 

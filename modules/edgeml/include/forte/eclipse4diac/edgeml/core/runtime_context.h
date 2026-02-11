@@ -18,7 +18,9 @@
   #include "forte/eclipse4diac/edgeml/backend/tflite_backend.h"
 #endif
 
+#include <mutex>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -35,6 +37,10 @@ namespace forte::eclipse4diac::edgeml {
 
       EEdgeMLError loadModel(const ModelMetadata &paMetadata, const std::vector<std::uint8_t> &paModelBinary);
       EEdgeMLError unloadModel(std::string_view paModelId);
+      EEdgeMLError inferModel(std::string_view paModelId,
+                              std::span<const float> paInput,
+                              std::span<float> paOutput,
+                              InferenceStats &paStats);
 
       [[nodiscard]] bool hasModel(std::string_view paModelId) const;
       [[nodiscard]] std::optional<ModelMetadata> findModel(std::string_view paModelId) const;
@@ -44,6 +50,7 @@ namespace forte::eclipse4diac::edgeml {
       EdgeMLRuntime();
 
       ModelRegistry mRegistry;
+      mutable std::mutex mRuntimeMutex;
       NullBackend mNullBackend;
 #ifdef FORTE_EDGEML_BACKEND_TFLITE
       TFLiteBackend mTfliteBackend;

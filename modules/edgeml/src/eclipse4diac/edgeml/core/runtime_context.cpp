@@ -10,6 +10,7 @@
 
 #include "forte/eclipse4diac/edgeml/core/runtime_context.h"
 
+#include <mutex>
 #include <vector>
 
 namespace forte::eclipse4diac::edgeml {
@@ -54,6 +55,7 @@ namespace forte::eclipse4diac::edgeml {
       return EEdgeMLError::kBackendUnavailable;
     }
 
+    std::lock_guard lock(mRuntimeMutex);
     auto &backend = backendForModel(paMetadata.id);
     const auto loadStatus = backend.loadModel(paMetadata, paModelBinary);
     if (EEdgeMLError::kOk == loadStatus || EEdgeMLError::kModelAlreadyExists == loadStatus) {
@@ -67,12 +69,29 @@ namespace forte::eclipse4diac::edgeml {
       return EEdgeMLError::kBackendUnavailable;
     }
 
+    std::lock_guard lock(mRuntimeMutex);
     auto &backend = backendForModel(paModelId);
     const auto unloadStatus = backend.unloadModel(paModelId);
     if (EEdgeMLError::kOk == unloadStatus) {
       [[maybe_unused]] const auto removed = mRegistry.unregisterModel(paModelId);
     }
     return unloadStatus;
+  }
+
+  EEdgeMLError EdgeMLRuntime::inferModel(const std::string_view paModelId,
+                                         const std::span<const float> paInput,
+                                         const std::span<float> paOutput,
+                                         InferenceStats &paStats) {
+    if (paModelId.empty()) {
+      return EEdgeMLError::kInvalidModelId;
+    }
+    if (!backendAvailableForModel(paModelId)) {
+      return EEdgeMLError::kBackendUnavailable;
+    }
+
+    std::lock_guard lock(mRuntimeMutex);
+    auto &backend = backendForModel(paModelId);
+    return backend.infer(paModelId, paInput, paOutput, paStats);
   }
 
   bool EdgeMLRuntime::hasModel(const std::string_view paModelId) const {

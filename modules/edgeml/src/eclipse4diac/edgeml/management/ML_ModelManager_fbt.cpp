@@ -14,7 +14,9 @@
 #include "forte/eclipse4diac/edgeml/core/runtime_context.h"
 
 #include <array>
+#include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 using namespace forte::literals;
@@ -54,6 +56,38 @@ namespace forte::eclipse4diac::edgeml {
         default: return FORTE_ML_ModelManager::scmErrorBackendFailure;
       }
     }
+
+    CIEC_ARRAY_VARIABLE<CIEC_BYTE> makeEmptyByteArray() {
+      CIEC_ARRAY_VARIABLE<CIEC_BYTE> array;
+      array.setBounds(0, -1);
+      return array;
+    }
+
+    bool isByteArrayVariant(const CIEC_ANY_VARIANT &paPayload) {
+      if (!std::holds_alternative<CIEC_ANY_UNIQUE_PTR<CIEC_ARRAY>>(paPayload)) {
+        return false;
+      }
+      const auto &array = *std::get<CIEC_ANY_UNIQUE_PTR<CIEC_ARRAY>>(paPayload);
+      return CIEC_ANY::e_BYTE == array.getElementDataTypeID();
+    }
+
+    std::vector<std::uint8_t> toBinary(const CIEC_ANY_VARIANT &paPayload) {
+      if (!std::holds_alternative<CIEC_ANY_UNIQUE_PTR<CIEC_ARRAY>>(paPayload)) {
+        return {};
+      }
+
+      const auto &array = *std::get<CIEC_ANY_UNIQUE_PTR<CIEC_ARRAY>>(paPayload);
+      if (CIEC_ANY::e_BYTE != array.getElementDataTypeID()) {
+        return {};
+      }
+
+      std::vector<std::uint8_t> result;
+      result.reserve(array.size());
+      for (intmax_t index = array.getLowerBound(), end = array.getUpperBound(); index <= end; ++index) {
+        result.push_back(static_cast<CIEC_BYTE::TValueType>(static_cast<const CIEC_BYTE &>(array[index])));
+      }
+      return result;
+    }
   } // namespace
 
   DEFINE_FIRMWARE_FB(FORTE_ML_ModelManager, "eclipse4diac::edgeml::ML_ModelManager"_STRID)
@@ -84,7 +118,7 @@ namespace forte::eclipse4diac::edgeml {
     var_VERSION = CIEC_STRING(std::string(""));
     var_SIZE_BYTES = CIEC_UDINT(0U);
     var_SHA256 = CIEC_STRING(std::string(""));
-    var_MODEL_BLOB = CIEC_STRING(std::string(""));
+    var_MODEL_BLOB.setValue(makeEmptyByteArray());
 
     var_SUCCESS = CIEC_BOOL(true);
     var_ERROR = CIEC_BOOL(false);
@@ -129,7 +163,12 @@ namespace forte::eclipse4diac::edgeml {
         }
 
         const auto &modelId = var_MODEL_ID.getStorage();
-        std::vector<std::uint8_t> modelBinary(var_MODEL_BLOB.getStorage().begin(), var_MODEL_BLOB.getStorage().end());
+        if (!isByteArrayVariant(var_MODEL_BLOB)) {
+          setError(scmErrorInvalidInput);
+          break;
+        }
+
+        auto modelBinary = toBinary(var_MODEL_BLOB);
         if (EdgeMLRuntime::isMockModelId(modelId) && modelBinary.empty()) {
           modelBinary.emplace_back(0x00);
         } else if (!EdgeMLRuntime::isMockModelId(modelId) && modelBinary.empty()) {

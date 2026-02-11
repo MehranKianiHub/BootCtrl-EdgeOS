@@ -15,6 +15,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
+#include <variant>
 #include <vector>
 
 using namespace forte::literals;
@@ -57,6 +59,29 @@ namespace forte::eclipse4diac::edgeml {
         default: return FORTE_ML_OTAUpdate::scmErrorApplyFailed;
       }
     }
+
+    CIEC_ARRAY_VARIABLE<CIEC_BYTE> makeEmptyByteArray() {
+      CIEC_ARRAY_VARIABLE<CIEC_BYTE> array;
+      array.setBounds(0, -1);
+      return array;
+    }
+
+    bool appendChunkBytes(std::vector<std::uint8_t> &paDestination, const CIEC_ANY_VARIANT &paChunkVariant) {
+      if (!std::holds_alternative<CIEC_ANY_UNIQUE_PTR<CIEC_ARRAY>>(paChunkVariant)) {
+        return false;
+      }
+
+      const auto &chunk = *std::get<CIEC_ANY_UNIQUE_PTR<CIEC_ARRAY>>(paChunkVariant);
+      if (CIEC_ANY::e_BYTE != chunk.getElementDataTypeID()) {
+        return false;
+      }
+
+      paDestination.reserve(paDestination.size() + chunk.size());
+      for (intmax_t index = chunk.getLowerBound(), end = chunk.getUpperBound(); index <= end; ++index) {
+        paDestination.push_back(static_cast<CIEC_BYTE::TValueType>(static_cast<const CIEC_BYTE &>(chunk[index])));
+      }
+      return true;
+    }
   } // namespace
 
   DEFINE_FIRMWARE_FB(FORTE_ML_OTAUpdate, "eclipse4diac::edgeml::ML_OTAUpdate"_STRID)
@@ -88,7 +113,7 @@ namespace forte::eclipse4diac::edgeml {
     var_MODEL_ID = CIEC_STRING(std::string(""));
     var_VERSION = CIEC_STRING(std::string(""));
     var_EXPECTED_SIZE = CIEC_UDINT(0U);
-    var_CHUNK = CIEC_STRING(std::string(""));
+    var_CHUNK.setValue(makeEmptyByteArray());
 
     var_STATE = CIEC_USINT(scmStateIdle);
     var_PROGRESS = CIEC_USINT(0U);
@@ -194,7 +219,10 @@ namespace forte::eclipse4diac::edgeml {
           break;
         }
 
-        mStagedBlob.append(var_CHUNK.getStorage());
+        if (!appendChunkBytes(mStagedBlob, var_CHUNK)) {
+          setError(scmErrorInvalidPayload);
+          break;
+        }
         var_STAGED_SIZE = CIEC_UDINT(static_cast<CIEC_UDINT::TValueType>(mStagedBlob.size()));
         updateProgress();
         break;
@@ -211,7 +239,7 @@ namespace forte::eclipse4diac::edgeml {
           break;
         }
 
-        std::vector<std::uint8_t> modelBinary(mStagedBlob.begin(), mStagedBlob.end());
+        auto modelBinary = mStagedBlob;
         if (modelBinary.empty()) {
           if (EdgeMLRuntime::isMockModelId(mStagedModelId)) {
             modelBinary.emplace_back(0x00);

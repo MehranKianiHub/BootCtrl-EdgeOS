@@ -13,6 +13,7 @@
 #include "forte/eclipse4diac/edgeml/core/model_metadata.h"
 
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -31,6 +32,7 @@ namespace forte::eclipse4diac::edgeml {
       void clear();
 
     private:
+      mutable std::shared_mutex mMutex;
       std::unordered_map<std::string, ModelMetadata> mModels;
   };
 

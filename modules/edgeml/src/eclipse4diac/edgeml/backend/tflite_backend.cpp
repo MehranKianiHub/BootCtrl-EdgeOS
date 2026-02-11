@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <mutex>
 #include <utility>
 
 namespace forte::eclipse4diac::edgeml {
@@ -45,6 +46,7 @@ namespace forte::eclipse4diac::edgeml {
       return EEdgeMLError::kInvalidInput;
     }
 
+    std::lock_guard lock(mMutex);
     if (mLoadedModels.contains(paMetadata.id)) {
       return EEdgeMLError::kModelAlreadyExists;
     }
@@ -73,6 +75,7 @@ namespace forte::eclipse4diac::edgeml {
   }
 
   EEdgeMLError TFLiteBackend::unloadModel(const std::string_view paModelId) {
+    std::lock_guard lock(mMutex);
     return 0 != mLoadedModels.erase(std::string(paModelId)) ? EEdgeMLError::kOk : EEdgeMLError::kModelNotFound;
   }
 
@@ -80,6 +83,7 @@ namespace forte::eclipse4diac::edgeml {
                                     const std::span<const float> paInput,
                                     const std::span<float> paOutput,
                                     InferenceStats &paStats) {
+    std::lock_guard lock(mMutex);
     const auto loadedModel = mLoadedModels.find(std::string(paModelId));
     if (loadedModel == mLoadedModels.end()) {
       return EEdgeMLError::kModelNotLoaded;

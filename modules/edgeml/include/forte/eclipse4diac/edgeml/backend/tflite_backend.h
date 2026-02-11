@@ -16,6 +16,7 @@
 #include <tensorflow/lite/model.h>
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -42,6 +43,7 @@ namespace forte::eclipse4diac::edgeml {
         std::unique_ptr<tflite::Interpreter> interpreter;
       };
 
+      mutable std::mutex mMutex;
       std::unordered_map<std::string, ModelInstance> mLoadedModels;
   };
 

@@ -10,6 +10,12 @@
 
 #include "../../4diacFORTE/tests/core/fbtests/fbtestfixture.h"
 #include "../../4diacFORTE/tests/forte_boost_output_support.h"
+#include "forte/datatypes/forte_any_variant.h"
+#include "forte/datatypes/forte_array.h"
+#include "forte/datatypes/forte_array_common.h"
+#include "forte/datatypes/forte_array_fixed.h"
+#include "forte/datatypes/forte_array_variable.h"
+#include "forte/datatypes/forte_byte.h"
 #include "forte/datatypes/forte_bool.h"
 #include "forte/datatypes/forte_string.h"
 #include "forte/datatypes/forte_udint.h"
@@ -20,6 +26,20 @@
 using namespace forte::literals;
 
 namespace forte::eclipse4diac::edgeml::test {
+  namespace {
+    void setBlobFromString(CIEC_ANY_VARIANT &paTarget, const std::string &paValue) {
+      CIEC_ARRAY_VARIABLE<CIEC_BYTE> blob;
+      if (paValue.empty()) {
+        blob.setBounds(0, -1);
+      } else {
+        blob.setBounds(0, static_cast<intmax_t>(paValue.size()) - 1);
+        for (std::size_t i = 0; i < paValue.size(); ++i) {
+          blob[static_cast<intmax_t>(i)] = CIEC_BYTE(static_cast<CIEC_BYTE::TValueType>(paValue[i]));
+        }
+      }
+      paTarget.setValue(blob);
+    }
+  } // namespace
 
   struct ML_ModelManager_TestFixture : public forte::test::CFBTestFixtureBase {
 
@@ -35,7 +55,7 @@ namespace forte::eclipse4diac::edgeml::test {
       CIEC_STRING mVersion;
       CIEC_UDINT mSizeBytes;
       CIEC_STRING mSha256;
-      CIEC_STRING mModelBlob;
+      CIEC_ANY_VARIANT mModelBlob;
 
       CIEC_BOOL mSuccess;
       CIEC_BOOL mError;
@@ -57,7 +77,7 @@ namespace forte::eclipse4diac::edgeml::test {
     mVersion = CIEC_STRING(std::string("1.2.3"));
     mSizeBytes = CIEC_UDINT(3U);
     mSha256 = CIEC_STRING(std::string("sha256:test"));
-    mModelBlob = CIEC_STRING(std::string("abc"));
+    setBlobFromString(mModelBlob, "abc");
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
@@ -86,7 +106,7 @@ namespace forte::eclipse4diac::edgeml::test {
     mVersion = CIEC_STRING(std::string("0.0.1"));
     mSizeBytes = CIEC_UDINT(1U);
     mSha256 = CIEC_STRING(std::string("sha256:remove"));
-    mModelBlob = CIEC_STRING(std::string("x"));
+    setBlobFromString(mModelBlob, "x");
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));
@@ -115,7 +135,7 @@ namespace forte::eclipse4diac::edgeml::test {
     mVersion = CIEC_STRING(std::string(""));
     mSizeBytes = CIEC_UDINT(0U);
     mSha256 = CIEC_STRING(std::string(""));
-    mModelBlob = CIEC_STRING(std::string(""));
+    setBlobFromString(mModelBlob, "");
     triggerEvent(0);
 
     BOOST_TEST(checkForSingleOutputEventOccurence(0));

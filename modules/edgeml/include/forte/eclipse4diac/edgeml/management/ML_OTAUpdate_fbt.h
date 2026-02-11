@@ -10,6 +10,12 @@
 
 #pragma once
 
+#include "forte/datatypes/forte_array.h"
+#include "forte/datatypes/forte_array_common.h"
+#include "forte/datatypes/forte_array_fixed.h"
+#include "forte/datatypes/forte_array_variable.h"
+#include "forte/datatypes/forte_any_variant.h"
+#include "forte/datatypes/forte_byte.h"
 #include "forte/datatypes/forte_bool.h"
 #include "forte/datatypes/forte_string.h"
 #include "forte/datatypes/forte_udint.h"
@@ -17,7 +23,9 @@
 #include "forte/funcbloc.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 namespace forte::eclipse4diac::edgeml {
 
@@ -67,7 +75,7 @@ namespace forte::eclipse4diac::edgeml {
       CIEC_STRING var_MODEL_ID;
       CIEC_STRING var_VERSION;
       CIEC_UDINT var_EXPECTED_SIZE;
-      CIEC_STRING var_CHUNK;
+      CIEC_ANY_VARIANT var_CHUNK;
 
       CIEC_USINT var_STATE;
       CIEC_USINT var_PROGRESS;
@@ -106,7 +114,7 @@ namespace forte::eclipse4diac::edgeml {
     private:
       std::string mStagedModelId;
       std::string mStagedVersion;
-      std::string mStagedBlob;
+      std::vector<std::uint8_t> mStagedBlob;
       std::string mActiveModelId;
       std::string mPreviousActiveModelId;
       CIEC_UDINT::TValueType mExpectedSize;

@@ -12,6 +12,7 @@
 
 #include "forte/eclipse4diac/edgeml/backend/backend_interface.h"
 
+#include <mutex>
 #include <string>
 #include <unordered_set>
 
@@ -28,6 +29,7 @@ namespace forte::eclipse4diac::edgeml {
                          InferenceStats &paStats) override;
 
     private:
+      mutable std::mutex mMutex;
       std::unordered_set<std::string> mLoadedModels;
   };
 

@@ -10,6 +10,11 @@
 
 #pragma once
 
+#include "forte/datatypes/forte_any_variant.h"
+#include "forte/datatypes/forte_array.h"
+#include "forte/datatypes/forte_array_common.h"
+#include "forte/datatypes/forte_array_fixed.h"
+#include "forte/datatypes/forte_array_variable.h"
 #include "forte/datatypes/forte_bool.h"
 #include "forte/datatypes/forte_real.h"
 #include "forte/datatypes/forte_string.h"
@@ -25,14 +30,14 @@ namespace forte::eclipse4diac::edgeml {
       DECLARE_FIRMWARE_FB(FORTE_ML_Inference)
 
     public:
-      static constexpr CIEC_USINT::TValueType scmVectorWidth = 4;
-
       static constexpr CIEC_USINT::TValueType scmErrorOk = 0;
       static constexpr CIEC_USINT::TValueType scmErrorEmptyModelId = 1;
-      static constexpr CIEC_USINT::TValueType scmErrorInvalidOutputSize = 2;
-      static constexpr CIEC_USINT::TValueType scmErrorModelNotLoaded = 3;
-      static constexpr CIEC_USINT::TValueType scmErrorBackendFailure = 4;
-      static constexpr CIEC_USINT::TValueType scmErrorNonFiniteInput = 5;
+      static constexpr CIEC_USINT::TValueType scmErrorInvalidInputVector = 2;
+      static constexpr CIEC_USINT::TValueType scmErrorInvalidOutputCapacity = 3;
+      static constexpr CIEC_USINT::TValueType scmErrorModelNotLoaded = 4;
+      static constexpr CIEC_USINT::TValueType scmErrorBackendFailure = 5;
+      static constexpr CIEC_USINT::TValueType scmErrorNonFiniteInput = 6;
+      static constexpr CIEC_USINT::TValueType scmErrorOutputTooSmall = 7;
 
     private:
       static const TEventID scmEventREQID = 0;
@@ -50,39 +55,27 @@ namespace forte::eclipse4diac::edgeml {
       FORTE_ML_Inference(StringId paInstanceNameId, CFBContainer &paContainer);
 
       CIEC_STRING var_MODEL_ID;
-      CIEC_REAL var_IN_0;
-      CIEC_REAL var_IN_1;
-      CIEC_REAL var_IN_2;
-      CIEC_REAL var_IN_3;
-      CIEC_USINT var_OUT_SIZE;
+      CIEC_ANY_VARIANT var_IN_VALUES;
+      CIEC_UDINT var_OUT_CAPACITY;
 
-      CIEC_REAL var_OUT_0;
-      CIEC_REAL var_OUT_1;
-      CIEC_REAL var_OUT_2;
-      CIEC_REAL var_OUT_3;
+      CIEC_ANY_VARIANT var_OUT_VALUES;
       CIEC_BOOL var_VALID;
       CIEC_BOOL var_ERROR;
       CIEC_USINT var_ERROR_CODE;
-      CIEC_USINT var_OUTPUT_COUNT;
+      CIEC_UDINT var_OUTPUT_COUNT;
       CIEC_UDINT var_INFERENCE_US;
 
       CEventConnection conn_CNF;
 
       CDataConnection *conn_MODEL_ID;
-      CDataConnection *conn_IN_0;
-      CDataConnection *conn_IN_1;
-      CDataConnection *conn_IN_2;
-      CDataConnection *conn_IN_3;
-      CDataConnection *conn_OUT_SIZE;
+      CDataConnection *conn_IN_VALUES;
+      CDataConnection *conn_OUT_CAPACITY;
 
-      COutDataConnection<CIEC_REAL> conn_OUT_0;
-      COutDataConnection<CIEC_REAL> conn_OUT_1;
-      COutDataConnection<CIEC_REAL> conn_OUT_2;
-      COutDataConnection<CIEC_REAL> conn_OUT_3;
+      COutDataConnection<CIEC_ANY_VARIANT> conn_OUT_VALUES;
       COutDataConnection<CIEC_BOOL> conn_VALID;
       COutDataConnection<CIEC_BOOL> conn_ERROR;
       COutDataConnection<CIEC_USINT> conn_ERROR_CODE;
-      COutDataConnection<CIEC_USINT> conn_OUTPUT_COUNT;
+      COutDataConnection<CIEC_UDINT> conn_OUTPUT_COUNT;
       COutDataConnection<CIEC_UDINT> conn_INFERENCE_US;
 
       CIEC_ANY *getDI(size_t paIndex) override;
@@ -90,6 +83,9 @@ namespace forte::eclipse4diac::edgeml {
       CEventConnection *getEOConUnchecked(TPortId paIndex) override;
       CDataConnection **getDIConUnchecked(TPortId paIndex) override;
       CDataConnection *getDOConUnchecked(TPortId paIndex) override;
+
+    private:
+      void clearOutputVector();
   };
 
 } // namespace forte::eclipse4diac::edgeml

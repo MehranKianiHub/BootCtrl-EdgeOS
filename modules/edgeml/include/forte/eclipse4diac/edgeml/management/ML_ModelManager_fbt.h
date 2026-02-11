@@ -10,6 +10,12 @@
 
 #pragma once
 
+#include "forte/datatypes/forte_array.h"
+#include "forte/datatypes/forte_array_common.h"
+#include "forte/datatypes/forte_array_fixed.h"
+#include "forte/datatypes/forte_array_variable.h"
+#include "forte/datatypes/forte_any_variant.h"
+#include "forte/datatypes/forte_byte.h"
 #include "forte/datatypes/forte_bool.h"
 #include "forte/datatypes/forte_string.h"
 #include "forte/datatypes/forte_udint.h"
@@ -58,7 +64,7 @@ namespace forte::eclipse4diac::edgeml {
       CIEC_STRING var_VERSION;
       CIEC_UDINT var_SIZE_BYTES;
       CIEC_STRING var_SHA256;
-      CIEC_STRING var_MODEL_BLOB;
+      CIEC_ANY_VARIANT var_MODEL_BLOB;
 
       CIEC_BOOL var_SUCCESS;
       CIEC_BOOL var_ERROR;

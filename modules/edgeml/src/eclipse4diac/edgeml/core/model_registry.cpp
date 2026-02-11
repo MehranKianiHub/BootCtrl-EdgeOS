@@ -10,6 +10,9 @@
 
 #include "forte/eclipse4diac/edgeml/core/model_registry.h"
 
+#include <mutex>
+#include <shared_mutex>
+
 namespace forte::eclipse4diac::edgeml {
 
   bool ModelRegistry::registerModel(const ModelMetadata &paMetadata) {
@@ -17,6 +20,7 @@ namespace forte::eclipse4diac::edgeml {
       return false;
     }
 
+    std::unique_lock lock(mMutex);
     const auto [it, inserted] = mModels.emplace(paMetadata.id, paMetadata);
     if (!inserted) {
       it->second = paMetadata;
@@ -25,14 +29,17 @@ namespace forte::eclipse4diac::edgeml {
   }
 
   bool ModelRegistry::unregisterModel(const std::string_view paModelId) {
+    std::unique_lock lock(mMutex);
     return 0 != mModels.erase(std::string(paModelId));
   }
 
   bool ModelRegistry::hasModel(const std::string_view paModelId) const {
+    std::shared_lock lock(mMutex);
     return mModels.contains(std::string(paModelId));
   }
 
   std::optional<ModelMetadata> ModelRegistry::findModel(const std::string_view paModelId) const {
+    std::shared_lock lock(mMutex);
     const auto iterator = mModels.find(std::string(paModelId));
     if (mModels.end() == iterator) {
       return std::nullopt;
@@ -41,6 +48,7 @@ namespace forte::eclipse4diac::edgeml {
   }
 
   std::vector<ModelMetadata> ModelRegistry::listModels() const {
+    std::shared_lock lock(mMutex);
     std::vector<ModelMetadata> result;
     result.reserve(mModels.size());
     for (const auto &entry : mModels) {
@@ -50,10 +58,12 @@ namespace forte::eclipse4diac::edgeml {
   }
 
   std::size_t ModelRegistry::size() const {
+    std::shared_lock lock(mMutex);
     return mModels.size();
   }
 
   void ModelRegistry::clear() {
+    std::unique_lock lock(mMutex);
     mModels.clear();
   }
 

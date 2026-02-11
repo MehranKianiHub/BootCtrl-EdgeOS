@@ -11,6 +11,7 @@
 #include "forte/eclipse4diac/edgeml/backend/null_backend.h"
 
 #include <algorithm>
+#include <mutex>
 
 namespace forte::eclipse4diac::edgeml {
 
@@ -20,11 +21,13 @@ namespace forte::eclipse4diac::edgeml {
       return EEdgeMLError::kInvalidModelId;
     }
 
+    std::lock_guard lock(mMutex);
     const auto inserted = mLoadedModels.emplace(paMetadata.id).second;
     return inserted ? EEdgeMLError::kOk : EEdgeMLError::kModelAlreadyExists;
   }
 
   EEdgeMLError NullBackend::unloadModel(const std::string_view paModelId) {
+    std::lock_guard lock(mMutex);
     return 0 != mLoadedModels.erase(std::string(paModelId)) ? EEdgeMLError::kOk : EEdgeMLError::kModelNotFound;
   }
 
@@ -32,6 +35,7 @@ namespace forte::eclipse4diac::edgeml {
                                   const std::span<const float> paInput,
                                   const std::span<float> paOutput,
                                   InferenceStats &paStats) {
+    std::lock_guard lock(mMutex);
     if (!mLoadedModels.contains(std::string(paModelId))) {
       return EEdgeMLError::kModelNotLoaded;
     }
