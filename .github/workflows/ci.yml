@@ -97,7 +97,7 @@ jobs:
             fi
             flatbuffers_include="${GITHUB_WORKSPACE}/third_party/flatbuffers/include"
 
-            mapfile -t _absl_libs < <(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f -name 'libabsl*.so*' | sort -u)
+            mapfile -t _absl_libs < <(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libabsl*.so*' -o -name 'libabsl*.a' \) | sort -u)
             if [ "${#_absl_libs[@]}" -gt 0 ]; then
               extra_libraries="$(printf '%s;' "${_absl_libs[@]}")"
               extra_libraries="${extra_libraries%;}"
@@ -271,7 +271,7 @@ jobs:
             fi
             flatbuffers_include="${GITHUB_WORKSPACE}/third_party/flatbuffers/include"
 
-            mapfile -t _absl_libs < <(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f -name 'libabsl*.so*' | sort -u)
+            mapfile -t _absl_libs < <(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f \( -name 'libabsl*.so*' -o -name 'libabsl*.a' \) | sort -u)
             if [ "${#_absl_libs[@]}" -gt 0 ]; then
               extra_libraries="$(printf '%s;' "${_absl_libs[@]}")"
               extra_libraries="${extra_libraries%;}"
@@ -347,7 +347,7 @@ jobs:
           if [ -n "${tflite_extra_libs}" ]; then
             IFS=';' read -r -a _extra_lib_array <<< "${tflite_extra_libs}"
             for _extra_lib in "${_extra_lib_array[@]}"; do
-              if [ -f "${_extra_lib}" ] || [ -L "${_extra_lib}" ]; then
+              if [[ "${_extra_lib}" == *.so* ]] && { [ -f "${_extra_lib}" ] || [ -L "${_extra_lib}" ]; }; then
                 cp -P "${_extra_lib}" "${package_root}/lib/" || true
               fi
             done
