@@ -32,7 +32,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize Required Submodules
+        run: |
+          set -euxo pipefail
+          git submodule sync -- 4diacFORTE
+          git -c protocol.version=2 submodule update --init --depth=1 4diacFORTE
 
       - name: Install Build Dependencies
         run: |
@@ -238,7 +244,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize Required Submodules
+        run: |
+          set -euxo pipefail
+          git submodule sync -- 4diacFORTE
+          git -c protocol.version=2 submodule update --init --depth=1 4diacFORTE
 
       - name: Install Build Dependencies
         run: |
