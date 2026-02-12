@@ -511,7 +511,8 @@ jobs:
         run: |
           set -euxo pipefail
           ls -la ghcr-artifacts
-          test -n "$(find ghcr-artifacts -maxdepth 1 -name 'bootctrl-edgeos-*-release-tflite.tar.gz' -print -quit)"
+          find ghcr-artifacts -maxdepth 3 -type f | sort
+          test -n "$(find ghcr-artifacts -type f -name 'bootctrl-edgeos-*-release-tflite.tar.gz' -print -quit)"
 
       - name: Install ORAS
         uses: oras-project/setup-oras@v1
@@ -531,8 +532,13 @@ jobs:
           short_sha="${GITHUB_SHA:0:12}"
           created_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-          shopt -s nullglob
-          for tarball in ghcr-artifacts/bootctrl-edgeos-*-release-tflite.tar.gz; do
+          mapfile -t tarballs < <(find ghcr-artifacts -type f -name 'bootctrl-edgeos-*-release-tflite.tar.gz' | sort)
+          if [ "${#tarballs[@]}" -eq 0 ]; then
+            echo "No release tarballs found in downloaded artifacts." >&2
+            exit 1
+          fi
+
+          for tarball in "${tarballs[@]}"; do
             filename="$(basename "${tarball}")"
             arch="$(echo "${filename}" | sed -E 's/^bootctrl-edgeos-([A-Za-z0-9_]+)-release-tflite\.tar\.gz$/\1/')"
             sha_file="${tarball}.sha256"
