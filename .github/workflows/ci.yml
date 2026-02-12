@@ -490,3 +490,75 @@ jobs:
             ${{ env.BUILD_DIR }}/artifacts/*.tar.gz
             ${{ env.BUILD_DIR }}/artifacts/*.sha256
             ${{ env.BUILD_DIR }}/CMakeCache.txt
+
+  publish-ghcr:
+    name: Publish Release Artifacts to GHCR
+    needs: release-artifacts
+    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'master')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download Release Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: edgeos-release-tflite-*
+          path: ghcr-artifacts
+          merge-multiple: true
+
+      - name: Validate Downloaded Artifacts
+        run: |
+          set -euxo pipefail
+          ls -la ghcr-artifacts
+          test -n "$(find ghcr-artifacts -maxdepth 1 -name 'bootctrl-edgeos-*-release-tflite.tar.gz' -print -quit)"
+
+      - name: Install ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR
+        run: |
+          set -euxo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push Artifacts with Stable and Immutable Tags
+        run: |
+          set -euxo pipefail
+
+          owner_lower="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo_lower="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
+          package_ref="ghcr.io/${owner_lower}/${repo_lower}-artifacts"
+          short_sha="${GITHUB_SHA:0:12}"
+          created_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          shopt -s nullglob
+          for tarball in ghcr-artifacts/bootctrl-edgeos-*-release-tflite.tar.gz; do
+            filename="$(basename "${tarball}")"
+            arch="$(echo "${filename}" | sed -E 's/^bootctrl-edgeos-([A-Za-z0-9_]+)-release-tflite\.tar\.gz$/\1/')"
+            sha_file="${tarball}.sha256"
+
+            if [ ! -f "${sha_file}" ]; then
+              echo "Missing checksum file for ${filename}" >&2
+              exit 1
+            fi
+
+            latest_tag="latest-${arch}"
+            immutable_tag="sha-${short_sha}-${arch}"
+
+            for tag in "${latest_tag}" "${immutable_tag}"; do
+              oras push "${package_ref}:${tag}" \
+                --artifact-type "application/vnd.bootctrl.edgeos.release.v1+tar" \
+                --annotation "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+                --annotation "org.opencontainers.image.revision=${GITHUB_SHA}" \
+                --annotation "org.opencontainers.image.created=${created_utc}" \
+                --annotation "org.opencontainers.image.description=BootCtrl EdgeOS release artifact (${arch}, TFLite backend)" \
+                "${tarball}:application/gzip" \
+                "${sha_file}:text/plain"
+            done
+
+            {
+              echo "- ${arch}:"
+              echo "  - stable: \`${package_ref}:${latest_tag}\`"
+              echo "  - immutable: \`${package_ref}:${immutable_tag}\`"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          done
