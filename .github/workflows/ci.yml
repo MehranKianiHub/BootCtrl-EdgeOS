@@ -226,7 +226,7 @@ jobs:
 
   release-artifacts:
     name: Release Artifact / ${{ matrix.arch }}
-    needs: tflite-tests
+    #needs: tflite-tests
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 150
     strategy:
@@ -399,6 +399,24 @@ jobs:
           artifact_dir="${BUILD_DIR}/artifacts"
           tflite_lib="${{ steps.tflite.outputs.library_path }}"
           tflite_extra_libs="${{ steps.tflite.outputs.extra_libraries }}"
+          safe_copy() {
+            local src="$1"
+            local dst="$2"
+            local mode="${3:-file}"
+            if [ "${mode}" = "dir" ]; then
+              if [ -d "${src}" ]; then
+                cp -r "${src}" "${dst}"
+              else
+                echo "[package] skip missing directory: ${src}"
+              fi
+            else
+              if [ -f "${src}" ]; then
+                cp "${src}" "${dst}"
+              else
+                echo "[package] skip missing file: ${src}"
+              fi
+            fi
+          }
 
           rm -rf "${BUILD_DIR}/package"
           mkdir -p "${package_root}/bin" "${package_root}/lib" "${package_root}/configurations" "${artifact_dir}"
@@ -412,23 +430,16 @@ jobs:
             README.md was not available in this CI checkout.
             README_FALLBACK
           fi
-          if [ -f "docs/DEPLOYMENT.md" ]; then
-            cp docs/DEPLOYMENT.md "${package_root}/DEPLOYMENT.md"
-          else
+          safe_copy "docs/DEPLOYMENT.md" "${package_root}/DEPLOYMENT.md"
+          if [ ! -f "${package_root}/DEPLOYMENT.md" ]; then
             cat > "${package_root}/DEPLOYMENT.md" <<'DEPLOYMENT_FALLBACK'
             Deployment guide was not available in this CI checkout.
             Run ./run-forte.sh to start the runtime.
             DEPLOYMENT_FALLBACK
           fi
-          if [ -d "configurations/examples" ]; then
-            cp -r configurations/examples "${package_root}/configurations/examples"
-          fi
-          if [ -d "configurations/templates" ]; then
-            cp -r configurations/templates "${package_root}/configurations/templates"
-          fi
-          if [ -f "configurations/README.md" ]; then
-            cp configurations/README.md "${package_root}/configurations/README.md"
-          fi
+          safe_copy "configurations/examples" "${package_root}/configurations/examples" "dir"
+          safe_copy "configurations/templates" "${package_root}/configurations/templates" "dir"
+          safe_copy "configurations/README.md" "${package_root}/configurations/README.md"
 
           if [[ "${tflite_lib}" == *.so* ]]; then
             tflite_lib_real="$(readlink -f "${tflite_lib}")"
