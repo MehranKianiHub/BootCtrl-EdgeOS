@@ -226,7 +226,7 @@ jobs:
 
   release-artifacts:
     name: Release Artifact / ${{ matrix.arch }}
-    #needs: tflite-tests
+    needs: tflite-tests
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 150
     strategy:
