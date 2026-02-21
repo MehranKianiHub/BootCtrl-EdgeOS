@@ -402,6 +402,7 @@ Conclusion
 ----------
 
 This document introduced industrial automation with IEC 61499, the Eclipse 4diac framework, and the BootCtrl‑EdgeOS project. We covered C++ fundamentals, memory management, and how to develop machine‑learning function blocks using TensorFlow Lite Micro or ONNX Runtime. You learned how to set up the development environment, design function block interfaces, implement inference logic, and consider edge optimisation techniques. BootCtrl’s roadmap includes advanced features like explainable AI, federated learning and security, making it a promising platform for bringing AI to industrial automation. Continue exploring the repository and documentation, experiment with building your own FBs, and contribute to the community to advance this open‑source project.
+
 ---
 
 ## 📄 License
