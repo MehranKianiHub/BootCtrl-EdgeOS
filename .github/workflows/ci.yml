@@ -37,6 +37,8 @@ jobs:
       - name: Initialize Required Submodules
         run: |
           set -euxo pipefail
+          cd "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           git submodule sync -- 4diacFORTE
           git -c protocol.version=2 submodule update --init --depth=1 4diacFORTE
 
@@ -283,6 +285,7 @@ jobs:
           fi
           git --version
           test -d .git
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           git submodule sync -- 4diacFORTE
           git -c protocol.version=2 submodule update --init --depth=1 4diacFORTE
 
