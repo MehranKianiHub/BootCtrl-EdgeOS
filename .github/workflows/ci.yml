@@ -248,6 +248,12 @@ jobs:
       BUILD_DIR: build/ci-release-tflite-${{ matrix.arch }}
 
     steps:
+      - name: Install Core VCS Tools
+        run: |
+          set -euxo pipefail
+          apt-get update
+          apt-get install -y git ca-certificates
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -264,18 +270,19 @@ jobs:
             gcc \
             make \
             pkg-config \
-            git \
             python3 \
             python3-pip
 
       - name: Initialize Required Submodules
         run: |
           set -euxo pipefail
+          cd "${GITHUB_WORKSPACE}"
           if ! command -v git >/dev/null 2>&1; then
             apt-get update
             apt-get install -y git ca-certificates
           fi
           git --version
+          test -d .git
           git submodule sync -- 4diacFORTE
           git -c protocol.version=2 submodule update --init --depth=1 4diacFORTE
 
