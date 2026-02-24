@@ -294,13 +294,19 @@ jobs:
         run: |
           set -euxo pipefail
           cd "${GITHUB_WORKSPACE}"
-          mapfile -t _format_files < <(rg -l --fixed-strings '#include <format>' 4diacFORTE || true)
+          mapfile -t _format_files < <(grep -Rsl -- '#include <format>' 4diacFORTE || true)
           for _f in "${_format_files[@]}"; do
             sed -i 's|#include <format>|#include <fmt/format.h>|g' "${_f}"
           done
-          rg -l 'std::format_to\(' 4diacFORTE | xargs -r sed -i 's/std::format_to(/fmt::format_to(/g'
-          rg -l 'std::format\(' 4diacFORTE | xargs -r sed -i 's/std::format(/fmt::format(/g'
-          rg -n '#include <format>|std::format\(|std::format_to\(' 4diacFORTE || true
+          mapfile -t _format_to_files < <(grep -Rsl -- 'std::format_to(' 4diacFORTE || true)
+          for _f in "${_format_to_files[@]}"; do
+            sed -i 's/std::format_to(/fmt::format_to(/g' "${_f}"
+          done
+          mapfile -t _format_call_files < <(grep -Rsl -- 'std::format(' 4diacFORTE || true)
+          for _f in "${_format_call_files[@]}"; do
+            sed -i 's/std::format(/fmt::format(/g' "${_f}"
+          done
+          grep -RsnE '#include <format>|std::format\(|std::format_to\(' 4diacFORTE || true
 
       - name: Install CMake 3.30+
         run: |
