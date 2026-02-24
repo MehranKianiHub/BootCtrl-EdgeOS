@@ -275,6 +275,24 @@ jobs:
             python3 \
             python3-pip
 
+      - name: Install C++20 Toolchain (bookworm-backports)
+        run: |
+          set -euxo pipefail
+          echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
+          apt-get update
+          apt-get install -y -t bookworm-backports \
+            gcc-13 \
+            g++-13 \
+            libstdc++-13-dev
+          echo "CC=gcc-13" >> "${GITHUB_ENV}"
+          echo "CXX=g++-13" >> "${GITHUB_ENV}"
+          cat > /tmp/format_smoke.cpp <<'CPP'
+          #include <format>
+          #include <string>
+          int main() { auto s = std::format("{}", 42); return static_cast<int>(s.size()); }
+          CPP
+          g++-13 -std=gnu++20 /tmp/format_smoke.cpp -o /tmp/format_smoke
+
       - name: Initialize Required Submodules
         run: |
           set -euxo pipefail
@@ -398,6 +416,8 @@ jobs:
         run: |
           set -euxo pipefail
           cmake -S . -B "${BUILD_DIR}" -G Ninja \
+            -DCMAKE_C_COMPILER="${CC}" \
+            -DCMAKE_CXX_COMPILER="${CXX}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DBOOTCTRL_ENABLE_EDGEML=ON \
             -DFORTE_TESTS=OFF \
@@ -488,6 +508,14 @@ jobs:
               cp -P "${_dep_so}" "${package_root}/lib/" || true
             done < <(find "${GITHUB_WORKSPACE}/third_party/tflite-build" -type f -name 'lib*.so*' | sort -u)
           fi
+          # Bundle C++ runtime libs used by this build so target devices with older
+          # system libstdc++ can execute the runtime via LD_LIBRARY_PATH.
+          for _rt_lib in libstdc++.so.6 libgcc_s.so.1 libatomic.so.1; do
+            _rt_path="$(ldconfig -p | awk -v l="${_rt_lib}" '$1==l {print $NF; exit}')"
+            if [ -n "${_rt_path}" ] && [ -e "${_rt_path}" ]; then
+              cp -P "${_rt_path}" "${package_root}/lib/" || true
+            fi
+          done
 
           cat > "${package_root}/run-forte.sh" <<'RUNNER'
           #!/usr/bin/env bash
