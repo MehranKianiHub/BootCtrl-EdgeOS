@@ -280,18 +280,39 @@ jobs:
           set -euxo pipefail
           echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
           apt-get update
-          apt-get install -y -t bookworm-backports \
-            gcc-13 \
-            g++-13 \
-            libstdc++-13-dev
-          echo "CC=gcc-13" >> "${GITHUB_ENV}"
-          echo "CXX=g++-13" >> "${GITHUB_ENV}"
           cat > /tmp/format_smoke.cpp <<'CPP'
           #include <format>
           #include <string>
           int main() { auto s = std::format("{}", 42); return static_cast<int>(s.size()); }
           CPP
-          g++-13 -std=gnu++20 /tmp/format_smoke.cpp -o /tmp/format_smoke
+          selected_cc=""
+          selected_cxx=""
+          for candidate in "14" "13" "default"; do
+            if [ "${candidate}" = "default" ]; then
+              cc_pkg="gcc"
+              cxx_pkg="g++"
+            else
+              cc_pkg="gcc-${candidate}"
+              cxx_pkg="g++-${candidate}"
+              if ! apt-cache show "${cc_pkg}" >/dev/null 2>&1 || ! apt-cache show "${cxx_pkg}" >/dev/null 2>&1; then
+                continue
+              fi
+            fi
+            if ! apt-get install -y -t bookworm-backports "${cc_pkg}" "${cxx_pkg}"; then
+              apt-get install -y "${cc_pkg}" "${cxx_pkg}"
+            fi
+            if "${cxx_pkg}" -std=gnu++20 /tmp/format_smoke.cpp -o /tmp/format_smoke; then
+              selected_cc="${cc_pkg}"
+              selected_cxx="${cxx_pkg}"
+              break
+            fi
+          done
+          if [ -z "${selected_cxx}" ]; then
+            echo "No available compiler in this image supports <format> with C++20." >&2
+            exit 1
+          fi
+          echo "CC=${selected_cc}" >> "${GITHUB_ENV}"
+          echo "CXX=${selected_cxx}" >> "${GITHUB_ENV}"
 
       - name: Initialize Required Submodules
         run: |
