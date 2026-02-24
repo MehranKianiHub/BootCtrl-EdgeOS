@@ -230,6 +230,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.container }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 150
     strategy:
       fail-fast: false
