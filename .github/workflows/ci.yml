@@ -273,46 +273,8 @@ jobs:
             make \
             pkg-config \
             python3 \
-            python3-pip
-
-      - name: Install C++20 Toolchain (bookworm-backports)
-        run: |
-          set -euxo pipefail
-          echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
-          apt-get update
-          cat > /tmp/format_smoke.cpp <<'CPP'
-          #include <format>
-          #include <string>
-          int main() { auto s = std::format("{}", 42); return static_cast<int>(s.size()); }
-          CPP
-          selected_cc=""
-          selected_cxx=""
-          for candidate in "14" "13" "default"; do
-            if [ "${candidate}" = "default" ]; then
-              cc_pkg="gcc"
-              cxx_pkg="g++"
-            else
-              cc_pkg="gcc-${candidate}"
-              cxx_pkg="g++-${candidate}"
-              if ! apt-cache show "${cc_pkg}" >/dev/null 2>&1 || ! apt-cache show "${cxx_pkg}" >/dev/null 2>&1; then
-                continue
-              fi
-            fi
-            if ! apt-get install -y -t bookworm-backports "${cc_pkg}" "${cxx_pkg}"; then
-              apt-get install -y "${cc_pkg}" "${cxx_pkg}"
-            fi
-            if "${cxx_pkg}" -std=gnu++20 /tmp/format_smoke.cpp -o /tmp/format_smoke; then
-              selected_cc="${cc_pkg}"
-              selected_cxx="${cxx_pkg}"
-              break
-            fi
-          done
-          if [ -z "${selected_cxx}" ]; then
-            echo "No available compiler in this image supports <format> with C++20." >&2
-            exit 1
-          fi
-          echo "CC=${selected_cc}" >> "${GITHUB_ENV}"
-          echo "CXX=${selected_cxx}" >> "${GITHUB_ENV}"
+            python3-pip \
+            libfmt-dev
 
       - name: Initialize Required Submodules
         run: |
@@ -327,6 +289,18 @@ jobs:
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           git submodule sync -- 4diacFORTE
           git -c protocol.version=2 submodule update --init --depth=1 4diacFORTE
+
+      - name: Patch 4diac std::format for Bookworm Compatibility
+        run: |
+          set -euxo pipefail
+          cd "${GITHUB_WORKSPACE}"
+          mapfile -t _format_files < <(rg -l --fixed-strings '#include <format>' 4diacFORTE || true)
+          for _f in "${_format_files[@]}"; do
+            sed -i 's|#include <format>|#include <fmt/format.h>|g' "${_f}"
+          done
+          rg -l 'std::format_to\(' 4diacFORTE | xargs -r sed -i 's/std::format_to(/fmt::format_to(/g'
+          rg -l 'std::format\(' 4diacFORTE | xargs -r sed -i 's/std::format(/fmt::format(/g'
+          rg -n '#include <format>|std::format\(|std::format_to\(' 4diacFORTE || true
 
       - name: Install CMake 3.30+
         run: |
@@ -437,8 +411,7 @@ jobs:
         run: |
           set -euxo pipefail
           cmake -S . -B "${BUILD_DIR}" -G Ninja \
-            -DCMAKE_C_COMPILER="${CC}" \
-            -DCMAKE_CXX_COMPILER="${CXX}" \
+            -DCMAKE_CXX_FLAGS="-DFMT_HEADER_ONLY" \
             -DCMAKE_BUILD_TYPE=Release \
             -DBOOTCTRL_ENABLE_EDGEML=ON \
             -DFORTE_TESTS=OFF \
