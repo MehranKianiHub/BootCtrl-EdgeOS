@@ -228,7 +228,7 @@ jobs:
 
   release-artifacts:
     name: Release Artifact / ${{ matrix.arch }}
-  #  needs: tflite-tests
+    needs: tflite-tests
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.container }}
