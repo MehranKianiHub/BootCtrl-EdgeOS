@@ -596,6 +596,7 @@ jobs:
             exit 1
           fi
 
+          latest_bundle_files=()
           for tarball in "${tarballs[@]}"; do
             filename="$(basename "${tarball}")"
             arch="$(echo "${filename}" | sed -E 's/^bootctrl-edgeos-([A-Za-z0-9_]+)-release-tflite\.tar\.gz$/\1/')"
@@ -620,9 +621,25 @@ jobs:
                 "${sha_file}:text/plain"
             done
 
+            latest_bundle_files+=("${tarball}:application/gzip")
+            latest_bundle_files+=("${sha_file}:text/plain")
+
             {
               echo "- ${arch}:"
               echo "  - stable: \`${package_ref}:${latest_tag}\`"
               echo "  - immutable: \`${package_ref}:${immutable_tag}\`"
             } >> "${GITHUB_STEP_SUMMARY}"
           done
+
+          oras push "${package_ref}:latest" \
+            --artifact-type "application/vnd.bootctrl.edgeos.release.bundle.v1+tar" \
+            --annotation "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --annotation "org.opencontainers.image.created=${created_utc}" \
+            --annotation "org.opencontainers.image.description=BootCtrl EdgeOS release artifacts bundle (multi-arch, TFLite backend)" \
+            "${latest_bundle_files[@]}"
+
+          {
+            echo "- bundle:"
+            echo "  - stable: \`${package_ref}:latest\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
