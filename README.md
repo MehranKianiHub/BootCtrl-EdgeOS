@@ -425,10 +425,10 @@ limitations under the License.
 
 ## 📞 Contact
 
+- 🌐 [Website](https://bootctrl.com/)
+- 📧 [Email](mailto:mehran.kiani@bootctrl.com)
 - 💬 [Discussions](https://github.com/MehranKianiHub/BootCtrl-EdgeOS/discussions)
 - 🐛 [Issues](https://github.com/MehranKianiHub/BootCtrl-EdgeOS/issues)
-- 📧 [Email](mailto:mehran.kiani@bootctrl.com)
-- 🌐 [Website](https://bootctrl.com/)
 
 <p align="center">
   <strong>⭐ Star us on GitHub if you find this project useful! ⭐</strong>
