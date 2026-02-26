@@ -55,7 +55,8 @@ jobs:
             git \
             python3 \
             python3-pip \
-            libboost-test-dev
+            libboost-test-dev \
+            libpaho-mqtt-dev
 
       - name: Install CMake 3.30+
         run: |
@@ -63,6 +64,23 @@ jobs:
           python3 -m pip install --user --break-system-packages "cmake>=3.30,<3.32"
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           "${HOME}/.local/bin/cmake" --version
+
+      - name: Resolve Paho MQTT
+        id: paho
+        run: |
+          set -euxo pipefail
+          include_dir="$(dpkg -L libpaho-mqtt-dev | grep '/MQTTAsync.h$' | head -n1 | sed 's#/MQTTAsync.h##')"
+          lib_path="$(ldconfig -p | awk '/libpaho-mqtt3a\.so/{print $NF; exit}')"
+          if [ -z "${lib_path}" ]; then
+            lib_path="$(ldconfig -p | awk '/libpaho-mqtt3as\.so/{print $NF; exit}')"
+          fi
+          test -n "${include_dir}"
+          test -f "${include_dir}/MQTTAsync.h"
+          test -n "${lib_path}"
+          test -e "${lib_path}"
+          echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
+          echo "lib_dir=$(dirname "${lib_path}")" >> "${GITHUB_OUTPUT}"
+          echo "lib=${lib_path}" >> "${GITHUB_OUTPUT}"
 
       - name: Provision TensorFlow Lite
         id: tflite
@@ -169,6 +187,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DBOOTCTRL_ENABLE_EDGEML=ON \
             -DFORTE_TESTS=ON \
+            -DFORTE_COM_PAHOMQTT=ON \
+            -DFORTE_COM_PAHOMQTT_INCLUDE_DIR="${{ steps.paho.outputs.include_dir }}" \
+            -DFORTE_COM_PAHOMQTT_LIB_DIR="${{ steps.paho.outputs.lib_dir }}" \
+            -DFORTE_COM_PAHOMQTT_LIB="${{ steps.paho.outputs.lib }}" \
             -DFORTE_EDGEML_BACKEND_TFLITE=ON \
             -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
             -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
@@ -176,6 +198,10 @@ jobs:
             -DFORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR="${{ steps.tflite.outputs.flatbuffers_include }}" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT:BOOL=ON" "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT_INCLUDE_DIR:PATH=${{ steps.paho.outputs.include_dir }}" "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT_LIB_DIR:PATH=${{ steps.paho.outputs.lib_dir }}" "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT_LIB:STRING=${{ steps.paho.outputs.lib }}" "${BUILD_DIR}/CMakeCache.txt"
 
       - name: Build
         run: |
@@ -274,7 +300,8 @@ jobs:
             pkg-config \
             python3 \
             python3-pip \
-            libfmt-dev
+            libfmt-dev \
+            libpaho-mqtt-dev
 
       - name: Initialize Required Submodules
         run: |
@@ -314,6 +341,23 @@ jobs:
           python3 -m pip install --user --break-system-packages "cmake>=3.30,<3.32"
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           "${HOME}/.local/bin/cmake" --version
+
+      - name: Resolve Paho MQTT
+        id: paho
+        run: |
+          set -euxo pipefail
+          include_dir="$(dpkg -L libpaho-mqtt-dev | grep '/MQTTAsync.h$' | head -n1 | sed 's#/MQTTAsync.h##')"
+          lib_path="$(ldconfig -p | awk '/libpaho-mqtt3a\.so/{print $NF; exit}')"
+          if [ -z "${lib_path}" ]; then
+            lib_path="$(ldconfig -p | awk '/libpaho-mqtt3as\.so/{print $NF; exit}')"
+          fi
+          test -n "${include_dir}"
+          test -f "${include_dir}/MQTTAsync.h"
+          test -n "${lib_path}"
+          test -e "${lib_path}"
+          echo "include_dir=${include_dir}" >> "${GITHUB_OUTPUT}"
+          echo "lib_dir=$(dirname "${lib_path}")" >> "${GITHUB_OUTPUT}"
+          echo "lib=${lib_path}" >> "${GITHUB_OUTPUT}"
 
       - name: Provision TensorFlow Lite
         id: tflite
@@ -421,6 +465,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DBOOTCTRL_ENABLE_EDGEML=ON \
             -DFORTE_TESTS=OFF \
+            -DFORTE_COM_PAHOMQTT=ON \
+            -DFORTE_COM_PAHOMQTT_INCLUDE_DIR="${{ steps.paho.outputs.include_dir }}" \
+            -DFORTE_COM_PAHOMQTT_LIB_DIR="${{ steps.paho.outputs.lib_dir }}" \
+            -DFORTE_COM_PAHOMQTT_LIB="${{ steps.paho.outputs.lib }}" \
             -DFORTE_EDGEML_BACKEND_TFLITE=ON \
             -DFORTE_EDGEML_TFLITE_INCLUDE_DIR="${{ steps.tflite.outputs.include_dir }}" \
             -DFORTE_EDGEML_TFLITE_LIBRARY="${{ steps.tflite.outputs.library_path }}" \
@@ -428,6 +476,10 @@ jobs:
             -DFORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR="${{ steps.tflite.outputs.flatbuffers_include }}" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           grep -q 'FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON' "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT:BOOL=ON" "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT_INCLUDE_DIR:PATH=${{ steps.paho.outputs.include_dir }}" "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT_LIB_DIR:PATH=${{ steps.paho.outputs.lib_dir }}" "${BUILD_DIR}/CMakeCache.txt"
+          grep -q "FORTE_COM_PAHOMQTT_LIB:STRING=${{ steps.paho.outputs.lib }}" "${BUILD_DIR}/CMakeCache.txt"
 
       - name: Build
         run: |
