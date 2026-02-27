@@ -712,6 +712,11 @@ jobs:
                   -DBUILD_SHARED_LIBS=ON \
                   -DTFLITE_ENABLE_XNNPACK=OFF \
                   -DFETCHCONTENT_SOURCE_DIR_FLATBUFFERS="/work/third_party/flatbuffers"
+                if ! grep -Eq "^CMAKE_SYSTEM_PROCESSOR:.*=${armhf_cmake_processor}$" third_party/tflite-build/CMakeCache.txt; then
+                  echo "Unexpected CMAKE_SYSTEM_PROCESSOR for armhf TFLite build"
+                  grep -E "^CMAKE_SYSTEM_PROCESSOR:" third_party/tflite-build/CMakeCache.txt || true
+                  exit 1
+                fi
                 cmake --build third_party/tflite-build --target tensorflow-lite -j"$(nproc)"
 
                 mapfile -t _tflite_targets < <(ninja -C third_party/tflite-build -t targets all | cut -d: -f1)
@@ -783,6 +788,11 @@ jobs:
                 -DFORTE_EDGEML_TFLITE_EXTRA_LIBRARIES="${tflite_extra_libraries}" \
                 -DFORTE_EDGEML_TFLITE_FLATBUFFERS_INCLUDE_DIR="${tflite_flatbuffers_include}" \
                 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+              if ! grep -Eq "^CMAKE_SYSTEM_PROCESSOR:.*=${armhf_cmake_processor}$" "${BUILD_DIR}/CMakeCache.txt"; then
+                echo "Unexpected CMAKE_SYSTEM_PROCESSOR for armhf EdgeOS build"
+                grep -E "^CMAKE_SYSTEM_PROCESSOR:" "${BUILD_DIR}/CMakeCache.txt" || true
+                exit 1
+              fi
               grep -q "FORTE_EDGEML_BACKEND_TFLITE_ACTIVE:INTERNAL=ON" "${BUILD_DIR}/CMakeCache.txt"
               grep -q "FORTE_COM_PAHOMQTT:BOOL=ON" "${BUILD_DIR}/CMakeCache.txt"
 
