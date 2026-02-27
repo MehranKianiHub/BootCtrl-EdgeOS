@@ -285,6 +285,16 @@ jobs:
         with:
           submodules: false
 
+      - name: Verify Release Build Script
+        run: |
+          set -euxo pipefail
+          test -f .github/scripts/build-release-in-container.sh || {
+            echo "Missing .github/scripts/build-release-in-container.sh in this commit."
+            echo "Commit/push both ci.yml and the script file together."
+            exit 1
+          }
+          chmod +x .github/scripts/build-release-in-container.sh
+
       - name: Build and Package in Container
         run: |
           set -euxo pipefail
