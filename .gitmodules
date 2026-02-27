@@ -1,3 +1,6 @@
 [submodule "4diacFBE"]
 	path = 4diacFBE
 	url = https://github.com/eclipse-4diac/4diac-fbe.git
+[submodule "4diacFORTE"]
+	path = 4diacFORTE
+	url = https://github.com/MehranKianiHub/4diac-forte.git
