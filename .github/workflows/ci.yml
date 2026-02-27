@@ -706,37 +706,11 @@ jobs:
                 git clone --depth=1 --branch v24.3.25 https://github.com/google/flatbuffers.git third_party/flatbuffers
                 git clone https://github.com/pytorch/cpuinfo.git third_party/cpuinfo
                 git -C third_party/cpuinfo checkout 8a1772a0c5c447df2d18edf33ec4603a8c9c04a6
-                python3 - <<"PY"
-                from pathlib import Path
-                cpuinfo_cmake = Path("/work/third_party/cpuinfo/CMakeLists.txt")
-                text = cpuinfo_cmake.read_text()
-                needle = "SET(CPUINFO_TARGET_PROCESSOR \"${CMAKE_SYSTEM_PROCESSOR}\")\n"
-                inject = (
-                    needle
-                    + "# Force processor detection from compiler target in armhf containers on arm64 hosts.\n"
-                    + "EXECUTE_PROCESS(\n"
-                    + "  COMMAND \"${CMAKE_C_COMPILER}\" -dumpmachine\n"
-                    + "  OUTPUT_VARIABLE CPUINFO_C_DUMP_MACHINE\n"
-                    + "  OUTPUT_STRIP_TRAILING_WHITESPACE\n"
-                    + "  ERROR_QUIET\n"
-                    + ")\n"
-                    + "IF(CPUINFO_C_DUMP_MACHINE MATCHES \"^(arm|armv[5-8]).*\")\n"
-                    + "  SET(CPUINFO_TARGET_PROCESSOR \"armv7\")\n"
-                    + "ENDIF()\n"
-                )
-                if needle not in text:
-                    raise SystemExit("cpuinfo CMakeLists layout changed; needle missing")
-                text = text.replace(needle, inject, 1)
-                text = text.replace(
-                    "IF(CMAKE_SYSTEM_PROCESSOR MATCHES \"^armv[5-8]\")",
-                    "IF(CPUINFO_TARGET_PROCESSOR MATCHES \"^armv[5-8]\")",
-                )
-                text = text.replace(
-                    "ELSEIF(CMAKE_SYSTEM_PROCESSOR MATCHES \"^(aarch64|arm64)$\")",
-                    "ELSEIF(CPUINFO_TARGET_PROCESSOR MATCHES \"^(aarch64|arm64)$\")",
-                )
-                cpuinfo_cmake.write_text(text)
-                PY
+                cpuinfo_cmake="third_party/cpuinfo/CMakeLists.txt"
+                grep -q "SET(CPUINFO_TARGET_PROCESSOR \"\${CMAKE_SYSTEM_PROCESSOR}\")" "${cpuinfo_cmake}"
+                perl -0777 -i -pe "s#SET\\(CPUINFO_TARGET_PROCESSOR \\\"\\$\\{CMAKE_SYSTEM_PROCESSOR\\}\\\"\\)\\n#SET(CPUINFO_TARGET_PROCESSOR \\\"\\\${CMAKE_SYSTEM_PROCESSOR}\\\")\\n# Force processor detection from compiler target in armhf containers on arm64 hosts.\\nEXECUTE_PROCESS(\\n  COMMAND \\\"\\\${CMAKE_C_COMPILER}\\\" -dumpmachine\\n  OUTPUT_VARIABLE CPUINFO_C_DUMP_MACHINE\\n  OUTPUT_STRIP_TRAILING_WHITESPACE\\n  ERROR_QUIET\\n)\\nIF(CPUINFO_C_DUMP_MACHINE MATCHES \\\"^(arm|armv[5-8]).*\\\")\\n  SET(CPUINFO_TARGET_PROCESSOR \\\"armv7\\\")\\nENDIF()\\n#s" "${cpuinfo_cmake}"
+                sed -i "s/IF(CMAKE_SYSTEM_PROCESSOR MATCHES \"^armv\\\\[5-8\\\\]\")/IF(CPUINFO_TARGET_PROCESSOR MATCHES \"^armv[5-8]\")/g" "${cpuinfo_cmake}"
+                sed -i "s/ELSEIF(CMAKE_SYSTEM_PROCESSOR MATCHES \"^(aarch64|arm64)$\")/ELSEIF(CPUINFO_TARGET_PROCESSOR MATCHES \"^(aarch64|arm64)$\")/g" "${cpuinfo_cmake}"
                 grep -n "CPUINFO_TARGET_PROCESSOR\\|CPUINFO_C_DUMP_MACHINE\\|aarch64\\|armv\\[5-8\\]" third_party/cpuinfo/CMakeLists.txt | sed -n "1,80p"
                 cmake -S third_party/tensorflow/tensorflow/lite \
                   -B third_party/tflite-build \
