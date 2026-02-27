@@ -646,6 +646,9 @@ jobs:
               python3 -m pip install --break-system-packages "cmake>=3.30,<3.32"
               export PATH="${HOME}/.local/bin:${PATH}"
               cmake --version
+              # On arm64 runners, uname inside armhf containers can still report aarch64.
+              # Force armv7 processor so dependencies (e.g. cpuinfo) pick armhf code paths.
+              armhf_cmake_processor="armv7"
 
               git config --global --add safe.directory "/work"
               git submodule sync -- 4diacFORTE
@@ -687,6 +690,9 @@ jobs:
                 apt-get install -y libtensorflow-lite-dev
                 tflite_include_dir="$(dpkg -L libtensorflow-lite-dev | grep "/tensorflow/lite/interpreter.h$" | head -n1 | sed "s#/tensorflow/lite/interpreter.h##")"
                 tflite_library_path="$(ldconfig -p | awk "/libtensorflowlite\\.so/{print \$NF; exit}")"
+                if [ -z "${tflite_library_path}" ]; then
+                  tflite_library_path="$(ldconfig -p | awk "/libtensorflow-lite\\.so/{print \$NF; exit}")"
+                fi
                 if [ -f "${tflite_include_dir}/flatbuffers/flatbuffers.h" ]; then
                   tflite_flatbuffers_include="${tflite_include_dir}"
                 elif [ -f "/usr/include/flatbuffers/flatbuffers.h" ]; then
@@ -702,6 +708,7 @@ jobs:
                   -B third_party/tflite-build \
                   -G Ninja \
                   -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_SYSTEM_PROCESSOR="${armhf_cmake_processor}" \
                   -DBUILD_SHARED_LIBS=ON \
                   -DTFLITE_ENABLE_XNNPACK=OFF \
                   -DFETCHCONTENT_SOURCE_DIR_FLATBUFFERS="/work/third_party/flatbuffers"
@@ -763,6 +770,7 @@ jobs:
               cmake -S . -B "${BUILD_DIR}" -G Ninja \
                 -DCMAKE_CXX_FLAGS="-DFMT_HEADER_ONLY" \
                 -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_SYSTEM_PROCESSOR="${armhf_cmake_processor}" \
                 -DBOOTCTRL_ENABLE_EDGEML=ON \
                 -DFORTE_TESTS=OFF \
                 -DFORTE_COM_PAHOMQTT=ON \
